@@ -37,6 +37,7 @@ const defaultGoals = [
 const defaultProfile = {
   name: "Seu Nome",
   role: "Seu cargo",
+  sellerId: "",
 };
 
 function canUseStorage() {
@@ -142,6 +143,10 @@ function getInitials(name) {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("") || "PF";
+}
+
+function getProfileSeller() {
+  return sellers.find((seller) => seller.id === profile.sellerId) ?? null;
 }
 
 function parseSale(entry) {
@@ -600,6 +605,7 @@ function renderDonutChart(distribution) {
 
 function renderTopbar() {
   const page = pageMap[state.activePage];
+  const profileSeller = getProfileSeller();
   return `
     <header class="topbar">
       <div class="topbar-meta">
@@ -615,13 +621,15 @@ function renderTopbar() {
           <span>⌕</span>
           <input type="search" placeholder="Pesquisar" value="${state.searchTerm}" data-input="search" />
         </div>
+        ${profileSeller ? `<button class="btn btn-secondary" data-action="my-sales">Minhas vendas</button>` : ""}
         <button class="btn btn-secondary" data-action="export">Exportar relatório</button>
-        <button class="btn btn-primary" data-action="new-sale">Nova venda</button>
+        <button class="btn btn-primary" data-action="new-sale">${profileSeller ? "Lançar minha venda" : "Nova venda"}</button>
         <button class="icon-btn" data-action="notifications">🔔</button>
         <div class="avatar">
           <div class="avatar-circle">${getInitials(profile.name)}</div>
           <div><strong>${profile.name}</strong><div class="helper-text">${profile.role}</div></div>
         </div>
+        <button class="btn btn-secondary" data-action="logout">Sair</button>
       </div>
     </header>
   `;
@@ -659,6 +667,7 @@ function renderSidebar(filteredSales) {
 
 function renderFilters() {
   const statusOptions = ["Recebido", "Pendente", "Em análise", "Cancelado", "Confirmado", "Atrasado", "Estornado"];
+  const profileSeller = getProfileSeller();
   return `
     <div class="panel">
       <div class="section-header">
@@ -669,6 +678,7 @@ function renderFilters() {
         </div>
         <div class="table-actions">
           <button class="btn btn-secondary" data-action="refresh">Atualizar dados</button>
+          ${profileSeller ? `<button class="btn btn-secondary" data-action="my-sales">Ver minhas vendas</button>` : ""}
           <button class="btn btn-secondary" data-action="clear-filters">Limpar filtros</button>
         </div>
       </div>
@@ -925,12 +935,13 @@ function renderFluxoPage() {
 
 function renderVendedoresPage(filteredSales) {
   const sellerStats = getSellerStats(filteredSales);
+  const profileSeller = getProfileSeller();
   if (!sellerStats.length) {
     return `
       <section class="hero-panel">
         <div class="hero-row">
           <div class="hero-copy"><div class="section-eyebrow">Vendedores</div><h1>Vendedores</h1><p>Acompanhe o desempenho individual da equipe com métricas de meta, comissão, volume e histórico operacional.</p></div>
-          <div class="action-row"><button class="btn btn-primary" data-action="new-seller">Cadastrar vendedor</button></div>
+          <div class="action-row">${profileSeller ? `<button class="btn btn-secondary" data-action="my-sales">Minhas vendas</button>` : ""}<button class="btn btn-primary" data-action="new-seller">Cadastrar vendedor</button></div>
         </div>
       </section>
       <section class="panel">
@@ -942,7 +953,7 @@ function renderVendedoresPage(filteredSales) {
     <section class="hero-panel">
       <div class="hero-row">
         <div class="hero-copy"><div class="section-eyebrow">Vendedores</div><h1>Vendedores</h1><p>Acompanhe o desempenho individual da equipe com métricas de meta, comissão, volume e histórico operacional.</p></div>
-        <div class="action-row"><button class="btn btn-primary" data-action="new-seller">Cadastrar vendedor</button></div>
+        <div class="action-row">${profileSeller ? `<button class="btn btn-secondary" data-action="my-sales">Minhas vendas</button>` : ""}<button class="btn btn-primary" data-action="new-seller">Cadastrar vendedor</button></div>
       </div>
     </section>
     <section class="two-column">
@@ -1099,6 +1110,7 @@ function renderRelatoriosPage(filteredSales) {
 }
 
 function renderConfiguracoesPage() {
+  const profileSeller = getProfileSeller();
   return `
     <section class="hero-panel"><div class="hero-row"><div class="hero-copy"><div class="section-eyebrow">Configurações</div><h1>Configurações</h1><p>Ajustes gerais da plataforma preparados para futuras integrações, automações, usuários e parâmetros financeiros.</p></div></div></section>
     <section class="panel">
@@ -1108,6 +1120,7 @@ function renderConfiguracoesPage() {
       <form id="profile-form" class="modal-grid" style="margin-top:18px;">
         <label class="field"><span>Nome</span><input name="name" type="text" value="${profile.name}" placeholder="Seu nome" required /></label>
         <label class="field"><span>Cargo</span><input name="role" type="text" value="${profile.role}" placeholder="Seu cargo" required /></label>
+        <label class="field" style="grid-column:1 / -1;"><span>Meu cadastro como vendedor</span><select name="sellerId"><option value="">Não vinculado</option>${sellers.map((seller) => `<option value="${seller.id}" ${profile.sellerId === seller.id ? "selected" : ""}>${seller.nome}</option>`).join("")}</select><div class="helper-text">${profileSeller ? "Seu perfil está vinculado ao vendedor e o CRM pode filtrar suas vendas." : "Vincule seu perfil a um vendedor para usar os atalhos de minhas vendas."}</div></label>
         <div class="modal-actions">
           <button class="btn btn-primary" type="submit">Salvar perfil</button>
         </div>
@@ -1183,7 +1196,7 @@ function renderModal() {
             <button class="icon-btn" data-action="close-modal">✕</button>
           </div>
           <form id="sale-form" class="modal-grid">
-            <label class="field"><span>Vendedor</span><select name="seller" required>${sellers.map((seller) => `<option value="${seller.id}" ${sale?.vendedorId === seller.id ? "selected" : ""}>${seller.nome}</option>`).join("")}</select></label>
+            <label class="field"><span>Vendedor</span><select name="seller" required>${sellers.map((seller) => `<option value="${seller.id}" ${(sale?.vendedorId === seller.id || (!sale && profile.sellerId === seller.id)) ? "selected" : ""}>${seller.nome}</option>`).join("")}</select></label>
             <label class="field"><span>Cliente</span><input name="client" type="text" placeholder="Nome do cliente" value="${sale?.cliente ?? ""}" required /></label>
             <label class="field"><span>Valor</span><input name="value" type="number" min="0.01" step="0.01" placeholder="25000" value="${sale?.valor ?? ""}" required /></label>
             <label class="field"><span>Banco</span><select name="bank" required>${bankOptions.map((bank) => `<option value="${bank}" ${sale?.banco === bank ? "selected" : ""}>${bank}</option>`).join("")}</select></label>
@@ -1225,6 +1238,7 @@ function renderModal() {
           <form id="seller-form" class="form-stack" style="margin-top:20px;">
             <label class="field"><span>Nome</span><input name="name" type="text" placeholder="Nome do vendedor" value="${seller?.nome ?? ""}" required /></label>
             <label class="field"><span>Meta mensal</span><input name="goal" type="number" min="0.01" step="0.01" placeholder="250000" value="${seller?.meta_mensal ?? ""}" required /></label>
+            <label class="field"><span>Vínculo</span><select name="isOwner"><option value="no">Cadastro normal</option><option value="yes" ${profile.sellerId && seller?.id === profile.sellerId ? "selected" : ""}>Sou eu</option></select></label>
             <div class="modal-actions">
               <button class="btn btn-secondary" type="button" data-action="close-modal">Cancelar</button>
               <button class="btn btn-primary" type="submit">${isEditing ? "Salvar alterações" : "Salvar vendedor"}</button>
@@ -1454,6 +1468,7 @@ function attachEvents() {
       const formData = new FormData(sellerForm);
       const name = String(formData.get("name")).trim();
       const goal = Number(formData.get("goal"));
+      const isOwner = formData.get("isOwner") === "yes";
       const id = slugify(name);
       const initials = name
         .split(/\s+/)
@@ -1474,9 +1489,20 @@ function attachEvents() {
 
       if (isEditingSeller && state.modalData?.id) {
         updateSellerRecord(state.modalData.id, { name, goal, avatar: initials || "NV" });
+        if (isOwner) {
+          profile.sellerId = state.modalData.id;
+          persistProfile();
+        } else if (profile.sellerId === state.modalData.id) {
+          profile.sellerId = "";
+          persistProfile();
+        }
       } else {
         sellers.push({ id, nome: name, meta_mensal: goal, avatar: initials || "NV" });
         goals.push({ nome: name, tipo: "Vendedor", valor_meta: goal, valor_realizado: 0 });
+        if (isOwner) {
+          profile.sellerId = id;
+          persistProfile();
+        }
         persistCRMData();
       }
       state.modal = null;
@@ -1493,6 +1519,7 @@ function attachEvents() {
       const formData = new FormData(profileForm);
       profile.name = String(formData.get("name")).trim() || defaultProfile.name;
       profile.role = String(formData.get("role")).trim() || defaultProfile.role;
+      profile.sellerId = String(formData.get("sellerId") || "");
       persistProfile();
       renderApp();
       showToast("Perfil atualizado", "O cabeçalho da plataforma foi personalizado com sucesso.");
@@ -1523,9 +1550,25 @@ function attachEvents() {
     if (action === "export-excel") exportCurrentView("excel");
     if (action === "new-sale") { state.modal = "new-sale"; state.modalData = null; renderApp(); }
     if (action === "new-seller") { state.modal = "new-seller"; state.modalData = null; renderApp(); }
+    if (action === "my-sales") {
+      if (profile.sellerId) {
+        state.selectedSeller = profile.sellerId;
+        state.activePage = "financeiro";
+        renderApp();
+      } else {
+        showToast("Perfil não vinculado", "Vincule seu perfil ao seu cadastro de vendedor em Configurações.");
+      }
+    }
     if (action === "notifications") showToast("Central de alertas", "2 vendas pendentes e 1 operação em análise.");
     if (action === "refresh") showToast("Dados atualizados", "Os indicadores foram recalculados com sucesso.");
     if (action === "forgot-password") { state.modal = "forgot-password"; state.modalData = null; renderApp(); }
+    if (action === "logout") {
+      state.isAuthenticated = false;
+      removeStorage(STORAGE_KEYS.auth);
+      state.modal = null;
+      state.modalData = null;
+      renderApp();
+    }
     if (action === "clear-filters") {
       state.selectedPeriod = "30";
       state.selectedSeller = "all";
