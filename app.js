@@ -10,10 +10,17 @@ const state = {
   selectedSellerDetail: null,
   notifications: [],
   modal: null,
+  modalData: null,
   tableState: {},
 };
 
-const sellers = [
+const STORAGE_KEYS = {
+  sellers: "crm-financeiro-sellers",
+  sales: "crm-financeiro-sales",
+  goals: "crm-financeiro-goals",
+};
+
+const defaultSellers = [
   { id: "camila", nome: "Camila Rocha", meta_mensal: 380000, avatar: "CR" },
   { id: "felipe", nome: "Felipe Matos", meta_mensal: 320000, avatar: "FM" },
   { id: "natalia", nome: "Natália Duarte", meta_mensal: 290000, avatar: "ND" },
@@ -22,7 +29,7 @@ const sellers = [
 
 const bankOptions = ["V8", "SOMA", "LOTUS", "ICRED", "BANCO PAN", "BANCO C6", "GRANDINO", "VCTEX", "PRESENÇA BANK"];
 
-const sales = [
+const defaultSales = [
   ["2026-04-16","camila","Alessandra Souza",48250,"BANCO PAN",0.08,"Recebido","2026-04-16","INSS",3890],
   ["2026-04-16","felipe","João Batista",31800,"BANCO C6",0.075,"Pendente","2026-04-16","CLT",2140],
   ["2026-04-15","camila","Vera Lúcia",27990,"V8",0.07,"Recebido","2026-04-15","FGTS",1840],
@@ -60,13 +67,57 @@ const cashFlow = [
   ["2026-04-04","Entrada","Recebimento Santander","Venda",25120,"Confirmado"],
 ];
 
-const goals = [
+const defaultGoals = [
   { nome: "Meta Geral", tipo: "Equipe", valor_meta: 1250000, valor_realizado: 1017200 },
   { nome: "Camila Rocha", tipo: "Vendedor", valor_meta: 380000, valor_realizado: 257840 },
   { nome: "Felipe Matos", tipo: "Vendedor", valor_meta: 320000, valor_realizado: 202150 },
   { nome: "Natália Duarte", tipo: "Vendedor", valor_meta: 290000, valor_realizado: 180350 },
   { nome: "Thiago Nunes", tipo: "Vendedor", valor_meta: 260000, valor_realizado: 134620 },
 ];
+
+function canUseStorage() {
+  return typeof localStorage !== "undefined";
+}
+
+function cloneData(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function readStorage(key, fallback) {
+  if (!canUseStorage()) return cloneData(fallback);
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : cloneData(fallback);
+  } catch {
+    return cloneData(fallback);
+  }
+}
+
+function writeStorage(key, value) {
+  if (!canUseStorage()) return;
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
+function persistCRMData() {
+  writeStorage(STORAGE_KEYS.sellers, sellers);
+  writeStorage(STORAGE_KEYS.sales, sales);
+  writeStorage(STORAGE_KEYS.goals, goals);
+}
+
+const sellers = readStorage(STORAGE_KEYS.sellers, defaultSellers);
+const sales = readStorage(STORAGE_KEYS.sales, defaultSales);
+const goals = readStorage(STORAGE_KEYS.goals, defaultGoals);
+
+function ensureEntityIds() {
+  sellers.forEach((seller) => {
+    if (!seller.id) seller.id = slugify(seller.nome);
+  });
+  sales.forEach((sale, index) => {
+    if (!sale[10]) sale[10] = `sale-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`;
+  });
+}
+
+ensureEntityIds();
 
 const pageMap = {
   dashboard_geral: { title: "Dashboard Geral", subtitle: "Visão completa do desempenho comercial e financeiro" },
@@ -111,6 +162,7 @@ function normalizedName(text) {
 function parseSale(entry) {
   const seller = sellers.find((item) => item.id === entry[1]);
   return {
+    id: entry[10],
     data: entry[0],
     vendedorId: entry[1],
     vendedor: seller?.nome ?? entry[1],
@@ -124,6 +176,77 @@ function parseSale(entry) {
     produto: entry[8],
     comissaoGestor: entry[9] ?? 0,
   };
+}
+
+function findSaleIndexById(id) {
+  return sales.findIndex((sale) => sale[10] === id);
+}
+
+function updateSaleRecord(saleId, payload) {
+  const index = findSaleIndexById(saleId);
+  if (index === -1) return false;
+  sales[index] = [
+    todayISO,
+    payload.seller,
+    payload.client,
+    payload.value,
+    payload.bank,
+    payload.sellerPercent / 100,
+    payload.status,
+    payload.proposalDate,
+    payload.product,
+    payload.value * (payload.ownerPercent / 100),
+    saleId,
+  ];
+  persistCRMData();
+  return true;
+}
+
+function removeSaleRecord(saleId) {
+  const index = findSaleIndexById(saleId);
+  if (index === -1) return false;
+  sales.splice(index, 1);
+  persistCRMData();
+  return true;
+}
+
+function updateSellerRecord(sellerId, payload) {
+  const seller = sellers.find((item) => item.id === sellerId);
+  if (!seller) return false;
+  const previousName = seller.nome;
+  seller.nome = payload.name;
+  seller.meta_mensal = payload.goal;
+  seller.avatar = payload.avatar;
+  const goalEntry = goals.find((goal) => goal.tipo === "Vendedor" && goal.nome === previousName);
+  if (goalEntry) {
+    goalEntry.nome = payload.name;
+    goalEntry.valor_meta = payload.goal;
+  }
+  persistCRMData();
+  return true;
+}
+
+function removeSellerRecord(sellerId) {
+  const sellerIndex = sellers.findIndex((item) => item.id === sellerId);
+  if (sellerIndex === -1) return false;
+  const seller = sellers[sellerIndex];
+  if (sales.some((sale) => sale[1] === sellerId)) {
+    showToast("Exclusão bloqueada", "Remova ou reatribua as vendas desse vendedor antes de excluir.");
+    return false;
+  }
+  sellers.splice(sellerIndex, 1);
+  const goalIndex = goals.findIndex((goal) => goal.tipo === "Vendedor" && goal.nome === seller.nome);
+  if (goalIndex !== -1) goals.splice(goalIndex, 1);
+  persistCRMData();
+  return true;
+}
+
+function resetCRMData() {
+  sellers.splice(0, sellers.length, ...cloneData(defaultSellers));
+  sales.splice(0, sales.length, ...cloneData(defaultSales));
+  goals.splice(0, goals.length, ...cloneData(defaultGoals));
+  ensureEntityIds();
+  persistCRMData();
 }
 
 function parseCashFlow(entry) {
@@ -703,7 +826,7 @@ function renderFinanceiroPage(filteredSales) {
     </section>
     <section class="table-card">
       <div class="section-header"><div><div class="section-eyebrow">Vendas Registradas</div><h3 style="margin:4px 0;">Tabela completa com os registros financeiros</h3><div class="table-subtitle">Leitura rápida de valores, comissão e status.</div></div></div>
-      ${renderTable("financeiro-sales", ["Data", "Vendedor", "Cliente", "Valor", "Banco", "% Comissão", "Comissão", "Minha comissão", "Status"], filteredSales.map((sale) => `
+      ${renderTable("financeiro-sales", ["Data", "Vendedor", "Cliente", "Valor", "Banco", "% Comissão", "Comissão", "Minha comissão", "Status", "Ações"], filteredSales.map((sale) => `
         <tr>
           <td>${fmtDate(sale.data)}</td>
           <td>${sale.vendedor}</td>
@@ -714,6 +837,7 @@ function renderFinanceiroPage(filteredSales) {
           <td class="table-currency">${fmtCurrency(sale.comissao)}</td>
           <td class="table-currency">${fmtCurrency(sale.comissaoGestor)}</td>
           <td><span class="badge ${getStatusClass(sale.status)}">${sale.status}</span></td>
+          <td><div class="table-row-actions"><button class="seller-action" data-action="edit-sale" data-sale-id="${sale.id}">Editar</button><button class="seller-action seller-action-danger" data-action="delete-sale" data-sale-id="${sale.id}">Excluir</button></div></td>
         </tr>
       `))}
     </section>
@@ -850,6 +974,8 @@ function renderVendedoresPage(filteredSales) {
               </div>
               <div class="report-actions seller-actions">
                 <button class="seller-action seller-action-primary" data-seller="${seller.id}" data-action="seller-detail">Abrir painel</button>
+                <button class="seller-action" data-seller="${seller.id}" data-action="edit-seller">Editar</button>
+                <button class="seller-action seller-action-danger" data-seller="${seller.id}" data-action="delete-seller">Excluir</button>
               </div>
             </article>`).join("")}
         </div>
@@ -929,10 +1055,10 @@ function renderHistoricoPage(filteredSales) {
     </section>
     <section class="table-card">
       <div class="section-header"><div><div class="section-eyebrow">Registros Completos</div><h3 style="margin:4px 0;">Tabela completa para consulta</h3></div></div>
-      ${renderTable("historico-registros", ["Data", "Tipo", "Vendedor", "Cliente", "Valor", "Banco", "Comissão", "Minha comissão", "Status", "Data da proposta", "Produto"], filteredSales.map((sale) => `
+      ${renderTable("historico-registros", ["Data", "Tipo", "Vendedor", "Cliente", "Valor", "Banco", "Comissão", "Minha comissão", "Status", "Data da proposta", "Produto", "Ações"], filteredSales.map((sale) => `
         <tr>
           <td>${fmtDate(sale.data)}</td><td>Venda</td><td>${sale.vendedor}</td><td>${sale.cliente}</td><td class="table-currency">${fmtCurrency(sale.valor)}</td>
-          <td>${sale.banco}</td><td class="table-currency">${fmtCurrency(sale.comissao)}</td><td class="table-currency">${fmtCurrency(sale.comissaoGestor)}</td><td><span class="badge ${getStatusClass(sale.status)}">${sale.status}</span></td><td>${fmtDate(sale.dataProposta)}</td><td>${sale.produto}</td>
+          <td>${sale.banco}</td><td class="table-currency">${fmtCurrency(sale.comissao)}</td><td class="table-currency">${fmtCurrency(sale.comissaoGestor)}</td><td><span class="badge ${getStatusClass(sale.status)}">${sale.status}</span></td><td>${fmtDate(sale.dataProposta)}</td><td>${sale.produto}</td><td><div class="table-row-actions"><button class="seller-action" data-action="edit-sale" data-sale-id="${sale.id}">Editar</button><button class="seller-action seller-action-danger" data-action="delete-sale" data-sale-id="${sale.id}">Excluir</button></div></td>
         </tr>`))}
     </section>
   `;
@@ -966,6 +1092,12 @@ function renderRelatoriosPage(filteredSales) {
 function renderConfiguracoesPage() {
   return `
     <section class="hero-panel"><div class="hero-row"><div class="hero-copy"><div class="section-eyebrow">Configurações</div><h1>Configurações</h1><p>Ajustes gerais da plataforma preparados para futuras integrações, automações, usuários e parâmetros financeiros.</p></div></div></section>
+    <section class="panel">
+      <div class="section-header">
+        <div><div class="section-eyebrow">Dados locais</div><h3 style="margin:4px 0;">Gerenciamento dos dados salvos</h3><div class="panel-subtitle">Use esta opção para limpar os cadastros salvos no navegador e restaurar os dados demonstrativos.</div></div>
+        <div class="table-actions"><button class="btn btn-secondary" data-action="reset-data">Restaurar dados demo</button></div>
+      </div>
+    </section>
   `;
 }
 
@@ -1019,24 +1151,26 @@ function renderToasts() {
 function renderModal() {
   if (!state.modal) return "";
 
-  if (state.modal === "new-sale") {
+  if (state.modal === "new-sale" || state.modal === "edit-sale") {
+    const sale = state.modalData;
+    const isEditing = state.modal === "edit-sale";
     return `
       <div class="modal-backdrop" id="app-modal">
         <div class="modal-card">
           <div class="drawer-header">
-            <div><div class="section-eyebrow">Nova venda</div><h3 style="margin:4px 0;">Cadastrar nova venda</h3><p class="muted">Inclua a operação e atualize os indicadores do CRM.</p></div>
+            <div><div class="section-eyebrow">${isEditing ? "Editar venda" : "Nova venda"}</div><h3 style="margin:4px 0;">${isEditing ? "Editar venda" : "Cadastrar nova venda"}</h3><p class="muted">Inclua a operação e atualize os indicadores do CRM.</p></div>
             <button class="icon-btn" data-action="close-modal">✕</button>
           </div>
           <form id="sale-form" class="modal-grid">
-            <label class="field"><span>Vendedor</span><select name="seller" required>${sellers.map((seller) => `<option value="${seller.id}">${seller.nome}</option>`).join("")}</select></label>
-            <label class="field"><span>Cliente</span><input name="client" type="text" placeholder="Nome do cliente" required /></label>
-            <label class="field"><span>Valor</span><input name="value" type="number" min="0.01" step="0.01" placeholder="25000" required /></label>
-            <label class="field"><span>Banco</span><select name="bank" required>${bankOptions.map((bank) => `<option value="${bank}">${bank}</option>`).join("")}</select></label>
-            <label class="field"><span>% Comissão do vendedor</span><input name="commission" type="number" min="0" max="100" step="0.01" value="7.5" required /></label>
-            <label class="field"><span>Status</span><select name="status" required>${["Recebido", "Pendente", "Em análise", "Cancelado"].map((status) => `<option value="${status}">${status}</option>`).join("")}</select></label>
-            <label class="field"><span>Data da proposta</span><input name="proposalDate" type="date" value="${todayISO}" required /></label>
-            <label class="field"><span>Produto</span><select name="product" required><option value="FGTS">FGTS</option><option value="CLT">CLT</option><option value="INSS">INSS</option></select></label>
-            <label class="field" style="grid-column:1 / -1;"><span>% Sua comissão</span><input name="ownerCommissionPercent" type="number" min="0" max="100" step="0.01" placeholder="5" required /></label>
+            <label class="field"><span>Vendedor</span><select name="seller" required>${sellers.map((seller) => `<option value="${seller.id}" ${sale?.vendedorId === seller.id ? "selected" : ""}>${seller.nome}</option>`).join("")}</select></label>
+            <label class="field"><span>Cliente</span><input name="client" type="text" placeholder="Nome do cliente" value="${sale?.cliente ?? ""}" required /></label>
+            <label class="field"><span>Valor</span><input name="value" type="number" min="0.01" step="0.01" placeholder="25000" value="${sale?.valor ?? ""}" required /></label>
+            <label class="field"><span>Banco</span><select name="bank" required>${bankOptions.map((bank) => `<option value="${bank}" ${sale?.banco === bank ? "selected" : ""}>${bank}</option>`).join("")}</select></label>
+            <label class="field"><span>% Comissão do vendedor</span><input name="commission" type="number" min="0" max="100" step="0.01" value="${sale ? (sale.percentual_comissao * 100) : "7.5"}" required /></label>
+            <label class="field"><span>Status</span><select name="status" required>${["Recebido", "Pendente", "Em análise", "Cancelado"].map((status) => `<option value="${status}" ${sale?.status === status ? "selected" : ""}>${status}</option>`).join("")}</select></label>
+            <label class="field"><span>Data da proposta</span><input name="proposalDate" type="date" value="${sale?.dataProposta ?? todayISO}" required /></label>
+            <label class="field"><span>Produto</span><select name="product" required>${["FGTS","CLT","INSS"].map((product) => `<option value="${product}" ${sale?.produto === product ? "selected" : ""}>${product}</option>`).join("")}</select></label>
+            <label class="field" style="grid-column:1 / -1;"><span>% Sua comissão</span><input name="ownerCommissionPercent" type="number" min="0" max="100" step="0.01" value="${sale && sale.valor ? ((sale.comissaoGestor / sale.valor) * 100).toFixed(2) : ""}" placeholder="5" required /></label>
             <div class="sale-preview" style="grid-column:1 / -1;">
               <div class="sale-preview-item">
                 <span class="sale-preview-label">Comissão do vendedor</span>
@@ -1049,7 +1183,7 @@ function renderModal() {
             </div>
             <div class="modal-actions">
               <button class="btn btn-secondary" type="button" data-action="close-modal">Cancelar</button>
-              <button class="btn btn-primary" type="submit">Salvar</button>
+              <button class="btn btn-primary" type="submit">${isEditing ? "Salvar alterações" : "Salvar"}</button>
             </div>
           </form>
         </div>
@@ -1057,20 +1191,22 @@ function renderModal() {
     `;
   }
 
-  if (state.modal === "new-seller") {
+  if (state.modal === "new-seller" || state.modal === "edit-seller") {
+    const seller = state.modalData;
+    const isEditing = state.modal === "edit-seller";
     return `
       <div class="modal-backdrop" id="app-modal">
         <div class="modal-card modal-card-sm">
           <div class="drawer-header">
-            <div><div class="section-eyebrow">Novo vendedor</div><h3 style="margin:4px 0;">Cadastrar vendedor</h3><p class="muted">Inclua um novo operador para aparecer no CRM, nos filtros e nas metas.</p></div>
+            <div><div class="section-eyebrow">${isEditing ? "Editar vendedor" : "Novo vendedor"}</div><h3 style="margin:4px 0;">${isEditing ? "Editar vendedor" : "Cadastrar vendedor"}</h3><p class="muted">Inclua um novo operador para aparecer no CRM, nos filtros e nas metas.</p></div>
             <button class="icon-btn" data-action="close-modal">✕</button>
           </div>
           <form id="seller-form" class="form-stack" style="margin-top:20px;">
-            <label class="field"><span>Nome</span><input name="name" type="text" placeholder="Nome do vendedor" required /></label>
-            <label class="field"><span>Meta mensal</span><input name="goal" type="number" min="0.01" step="0.01" placeholder="250000" required /></label>
+            <label class="field"><span>Nome</span><input name="name" type="text" placeholder="Nome do vendedor" value="${seller?.nome ?? ""}" required /></label>
+            <label class="field"><span>Meta mensal</span><input name="goal" type="number" min="0.01" step="0.01" placeholder="250000" value="${seller?.meta_mensal ?? ""}" required /></label>
             <div class="modal-actions">
               <button class="btn btn-secondary" type="button" data-action="close-modal">Cancelar</button>
-              <button class="btn btn-primary" type="submit">Salvar vendedor</button>
+              <button class="btn btn-primary" type="submit">${isEditing ? "Salvar alterações" : "Salvar vendedor"}</button>
             </div>
           </form>
         </div>
@@ -1229,6 +1365,7 @@ function attachEvents() {
     );
     saleForm.addEventListener("submit", (event) => {
       event.preventDefault();
+      const isEditingSale = state.modal === "edit-sale";
       const formData = new FormData(saleForm);
       const saleValue = Number(formData.get("value"));
       const sellerPercent = Number(formData.get("commission"));
@@ -1239,21 +1376,41 @@ function attachEvents() {
         return;
       }
 
-      sales.unshift([
-        todayISO,
-        formData.get("seller"),
-        formData.get("client"),
-        saleValue,
-        formData.get("bank"),
-        sellerPercent / 100,
-        formData.get("status"),
-        formData.get("proposalDate"),
-        formData.get("product"),
-        saleValue * (ownerPercent / 100),
-      ]);
+      const payload = {
+        seller: formData.get("seller"),
+        client: formData.get("client"),
+        value: saleValue,
+        bank: formData.get("bank"),
+        sellerPercent,
+        status: formData.get("status"),
+        proposalDate: formData.get("proposalDate"),
+        product: formData.get("product"),
+        ownerPercent,
+      };
+
+      if (isEditingSale && state.modalData?.id) {
+        updateSaleRecord(state.modalData.id, payload);
+      } else {
+        sales.unshift([
+          todayISO,
+          payload.seller,
+          payload.client,
+          payload.value,
+          payload.bank,
+          payload.sellerPercent / 100,
+          payload.status,
+          payload.proposalDate,
+          payload.product,
+          payload.value * (payload.ownerPercent / 100),
+          `sale-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        ]);
+        persistCRMData();
+      }
+      persistCRMData();
       state.modal = null;
+      state.modalData = null;
       renderApp();
-      showToast("Venda cadastrada", "A operação foi incluída e os indicadores foram atualizados.");
+      showToast(isEditingSale ? "Venda atualizada" : "Venda cadastrada", "A operação foi salva e os indicadores foram atualizados.");
     });
   }
 
@@ -1271,6 +1428,7 @@ function attachEvents() {
   if (sellerForm) {
     sellerForm.addEventListener("submit", (event) => {
       event.preventDefault();
+      const isEditingSeller = state.modal === "edit-seller";
       const formData = new FormData(sellerForm);
       const name = String(formData.get("name")).trim();
       const goal = Number(formData.get("goal"));
@@ -1287,16 +1445,22 @@ function attachEvents() {
         return;
       }
 
-      if (sellers.some((seller) => normalizedName(seller.nome) === normalizedName(name))) {
+      if (sellers.some((seller) => normalizedName(seller.nome) === normalizedName(name) && (!isEditingSeller || seller.id !== state.modalData?.id))) {
         showToast("Cadastro não realizado", "Já existe um vendedor com esse nome.");
         return;
       }
 
-      sellers.push({ id, nome: name, meta_mensal: goal, avatar: initials || "NV" });
-      goals.push({ nome: name, tipo: "Vendedor", valor_meta: goal, valor_realizado: 0 });
+      if (isEditingSeller && state.modalData?.id) {
+        updateSellerRecord(state.modalData.id, { name, goal, avatar: initials || "NV" });
+      } else {
+        sellers.push({ id, nome: name, meta_mensal: goal, avatar: initials || "NV" });
+        goals.push({ nome: name, tipo: "Vendedor", valor_meta: goal, valor_realizado: 0 });
+        persistCRMData();
+      }
       state.modal = null;
+      state.modalData = null;
       renderApp();
-      showToast("Vendedor cadastrado", "O novo vendedor já aparece nos filtros e no ranking.");
+      showToast(isEditingSeller ? "Vendedor atualizado" : "Vendedor cadastrado", "O cadastro foi salvo com sucesso.");
     });
   }
 
@@ -1322,11 +1486,11 @@ function attachEvents() {
     if (action === "export") exportCurrentView();
     if (action === "export-pdf") exportCurrentView("pdf");
     if (action === "export-excel") exportCurrentView("excel");
-    if (action === "new-sale") { state.modal = "new-sale"; renderApp(); }
-    if (action === "new-seller") { state.modal = "new-seller"; renderApp(); }
+    if (action === "new-sale") { state.modal = "new-sale"; state.modalData = null; renderApp(); }
+    if (action === "new-seller") { state.modal = "new-seller"; state.modalData = null; renderApp(); }
     if (action === "notifications") showToast("Central de alertas", "2 vendas pendentes e 1 operação em análise.");
     if (action === "refresh") showToast("Dados atualizados", "Os indicadores foram recalculados com sucesso.");
-    if (action === "forgot-password") { state.modal = "forgot-password"; renderApp(); }
+    if (action === "forgot-password") { state.modal = "forgot-password"; state.modalData = null; renderApp(); }
     if (action === "clear-filters") {
       state.selectedPeriod = "30";
       state.selectedSeller = "all";
@@ -1345,7 +1509,38 @@ function attachEvents() {
     }
     if (action === "close-modal") {
       state.modal = null;
+      state.modalData = null;
       renderApp();
+    }
+    if (action === "edit-sale") {
+      state.modal = "edit-sale";
+      state.modalData = parseSale(sales[findSaleIndexById(button.getAttribute("data-sale-id"))]);
+      renderApp();
+    }
+    if (action === "delete-sale") {
+      const saleId = button.getAttribute("data-sale-id");
+      removeSaleRecord(saleId);
+      renderApp();
+      showToast("Venda excluída", "O registro foi removido com sucesso.");
+    }
+    if (action === "edit-seller") {
+      state.modal = "edit-seller";
+      state.modalData = sellers.find((seller) => seller.id === button.getAttribute("data-seller"));
+      renderApp();
+    }
+    if (action === "delete-seller") {
+      if (removeSellerRecord(button.getAttribute("data-seller"))) {
+        renderApp();
+        showToast("Vendedor excluído", "O cadastro do vendedor foi removido.");
+      }
+    }
+    if (action === "reset-data") {
+      resetCRMData();
+      state.modal = null;
+      state.modalData = null;
+      state.selectedSellerDetail = null;
+      renderApp();
+      showToast("Dados restaurados", "Os dados demonstrativos foram restaurados no navegador.");
     }
     if (action === "sort-table") {
       const tableKey = button.getAttribute("data-table-key");

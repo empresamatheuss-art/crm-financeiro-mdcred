@@ -673,6 +673,12 @@ tbody tr:hover { background: rgba(36, 107, 255, 0.05); }
   font-weight: 700;
 }
 
+.table-row-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .seller-actions {
   justify-content: flex-start;
 }
@@ -682,6 +688,12 @@ tbody tr:hover { background: rgba(36, 107, 255, 0.05); }
   color: #fff;
   border-color: transparent;
   box-shadow: 0 12px 24px rgba(36, 107, 255, 0.18);
+}
+
+.seller-action-danger {
+  background: rgba(240, 68, 56, 0.08);
+  color: var(--danger);
+  border-color: rgba(240, 68, 56, 0.18);
 }
 
 .goal-card, .report-card, .timeline-card { padding: 22px; }
