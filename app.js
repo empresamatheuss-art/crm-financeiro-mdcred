@@ -15,42 +15,16 @@ const state = {
 };
 
 const STORAGE_KEYS = {
-  sellers: "crm-financeiro-sellers",
-  sales: "crm-financeiro-sales",
-  goals: "crm-financeiro-goals",
+  sellers: "crm-financeiro-sellers-v2",
+  sales: "crm-financeiro-sales-v2",
+  goals: "crm-financeiro-goals-v2",
 };
 
-const defaultSellers = [
-  { id: "camila", nome: "Camila Rocha", meta_mensal: 380000, avatar: "CR" },
-  { id: "felipe", nome: "Felipe Matos", meta_mensal: 320000, avatar: "FM" },
-  { id: "natalia", nome: "Natália Duarte", meta_mensal: 290000, avatar: "ND" },
-  { id: "thiago", nome: "Thiago Nunes", meta_mensal: 260000, avatar: "TN" },
-];
+const defaultSellers = [];
 
 const bankOptions = ["V8", "SOMA", "LOTUS", "ICRED", "BANCO PAN", "BANCO C6", "GRANDINO", "VCTEX", "PRESENÇA BANK"];
 
-const defaultSales = [
-  ["2026-04-16","camila","Alessandra Souza",48250,"BANCO PAN",0.08,"Recebido","2026-04-16","INSS",3890],
-  ["2026-04-16","felipe","João Batista",31800,"BANCO C6",0.075,"Pendente","2026-04-16","CLT",2140],
-  ["2026-04-15","camila","Vera Lúcia",27990,"V8",0.07,"Recebido","2026-04-15","FGTS",1840],
-  ["2026-04-15","natalia","Carlos Alberto",41200,"SOMA",0.082,"Em análise","2026-04-15","INSS",2980],
-  ["2026-04-14","thiago","Maria Helena",18950,"LOTUS",0.068,"Recebido","2026-04-14","CLT",1220],
-  ["2026-04-13","felipe","Raimundo Alves",52200,"BANCO PAN",0.085,"Recebido","2026-04-13","FGTS",4010],
-  ["2026-04-12","natalia","Sandra Regina",36850,"ICRED",0.078,"Recebido","2026-04-12","INSS",2570],
-  ["2026-04-12","thiago","Márcio Lima",24400,"GRANDINO",0.072,"Cancelado","2026-04-12","CLT",0],
-  ["2026-04-11","camila","Patrícia Gomes",60100,"VCTEX",0.09,"Recebido","2026-04-11","FGTS",4720],
-  ["2026-04-10","felipe","Ivone de Paula",29450,"PRESENÇA BANK",0.074,"Recebido","2026-04-10","INSS",2080],
-  ["2026-04-09","natalia","Jorge Ribeiro",44800,"BANCO PAN",0.083,"Pendente","2026-04-09","CLT",3350],
-  ["2026-04-08","thiago","Roseane Costa",21600,"V8",0.07,"Recebido","2026-04-08","FGTS",1490],
-  ["2026-04-07","camila","Antônio Silva",54700,"SOMA",0.086,"Recebido","2026-04-07","INSS",4250],
-  ["2026-04-06","felipe","Cláudia Mendes",33700,"LOTUS",0.073,"Em análise","2026-04-06","CLT",2390],
-  ["2026-04-05","natalia","Elias Sousa",27400,"BANCO C6",0.071,"Recebido","2026-04-05","FGTS",1760],
-  ["2026-04-04","thiago","Adriana Lopes",25120,"ICRED",0.072,"Recebido","2026-04-04","INSS",1680],
-  ["2026-04-03","camila","Sebastião Melo",66800,"GRANDINO",0.092,"Recebido","2026-04-03","CLT",5210],
-  ["2026-04-02","felipe","Rita Gomes",22850,"VCTEX",0.07,"Recebido","2026-04-02","FGTS",1540],
-  ["2026-04-01","natalia","Marinalva Cruz",30100,"PRESENÇA BANK",0.076,"Recebido","2026-04-01","INSS",2090],
-  ["2026-03-30","thiago","José Pereira",19450,"BANCO PAN",0.067,"Recebido","2026-03-30","CLT",1280],
-];
+const defaultSales = [];
 
 const cashFlow = [
   ["2026-04-16","Entrada","Recebimento Banco Pan","Venda",48250,"Confirmado"],
@@ -68,11 +42,7 @@ const cashFlow = [
 ];
 
 const defaultGoals = [
-  { nome: "Meta Geral", tipo: "Equipe", valor_meta: 1250000, valor_realizado: 1017200 },
-  { nome: "Camila Rocha", tipo: "Vendedor", valor_meta: 380000, valor_realizado: 257840 },
-  { nome: "Felipe Matos", tipo: "Vendedor", valor_meta: 320000, valor_realizado: 202150 },
-  { nome: "Natália Duarte", tipo: "Vendedor", valor_meta: 290000, valor_realizado: 180350 },
-  { nome: "Thiago Nunes", tipo: "Vendedor", valor_meta: 260000, valor_realizado: 134620 },
+  { nome: "Meta Geral", tipo: "Equipe", valor_meta: 0, valor_realizado: 0 },
 ];
 
 function canUseStorage() {
@@ -474,6 +444,17 @@ function getStatusClass(status) {
   return slugify(status);
 }
 
+function renderEmptyState(title, description, actionLabel = "", action = "") {
+  return `
+    <div class="empty-state">
+      <div class="empty-state-icon">+</div>
+      <h3>${title}</h3>
+      <p>${description}</p>
+      ${actionLabel && action ? `<button class="btn btn-primary" data-action="${action}">${actionLabel}</button>` : ""}
+    </div>
+  `;
+}
+
 function renderKpiCard(title, value, support, deltaText, deltaType) {
   return `
     <article class="kpi-card">
@@ -487,7 +468,7 @@ function renderKpiCard(title, value, support, deltaText, deltaType) {
 
 function renderTable(tableKey, columns, rows, emptyTitle = "Nenhuma venda registrada", emptyText = "Cadastre a primeira venda para começar o acompanhamento.") {
   if (!rows.length) {
-    return `<div class="empty-state"><h3>${emptyTitle}</h3><p>${emptyText}</p></div>`;
+    return renderEmptyState(emptyTitle, emptyText, state.activePage === "vendedores" ? "Cadastrar vendedor" : "Nova venda", state.activePage === "vendedores" ? "new-seller" : "new-sale");
   }
   const tableState = state.tableState[tableKey] ?? { page: 1, sortIndex: 0, sortDir: "desc" };
   return `
@@ -517,7 +498,7 @@ function renderTable(tableKey, columns, rows, emptyTitle = "Nenhuma venda regist
 }
 
 function renderLineChart(data) {
-  if (!data.length) return `<div class="empty-state"><h3>Nenhum dado encontrado</h3><p>Tente ajustar os filtros para visualizar os resultados.</p></div>`;
+  if (!data.length) return renderEmptyState("Nenhum dado encontrado", "Cadastre sua primeira venda para visualizar a evolução do período.", "Nova venda", "new-sale");
   const width = 640, height = 240, padding = 28;
   const max = Math.max(...data.map((item) => item.total));
   const points = data.map((item, index) => {
@@ -546,7 +527,7 @@ function renderLineChart(data) {
 }
 
 function renderBarChart(stats, key = "realizado") {
-  if (!stats.length) return `<div class="empty-state"><h3>Nenhum dado encontrado</h3><p>Tente ajustar os filtros para visualizar os resultados.</p></div>`;
+  if (!stats.length) return renderEmptyState("Nenhum vendedor cadastrado", "Cadastre vendedores para acompanhar ranking, desempenho e metas.", "Cadastrar vendedor", "new-seller");
   const max = Math.max(...stats.map((item) => item[key]), 1);
   return `
     <div class="mini-list">
@@ -570,7 +551,7 @@ function renderBarChart(stats, key = "realizado") {
 
 function renderDonutChart(distribution) {
   const entries = Object.entries(distribution);
-  if (!entries.length) return `<div class="empty-state"><h3>Nenhum dado encontrado</h3><p>Tente ajustar os filtros para visualizar os resultados.</p></div>`;
+  if (!entries.length) return renderEmptyState("Nenhum dado encontrado", "Cadastre vendas para visualizar a distribuição financeira.", "Nova venda", "new-sale");
   const total = entries.reduce((sum, [, value]) => sum + value, 0);
   const colors = ["#246bff", "#111827", "#12b76a", "#f79009", "#475467", "#98a2b3", "#7a5af8"];
   let cumulative = 0;
@@ -929,6 +910,19 @@ function renderFluxoPage() {
 
 function renderVendedoresPage(filteredSales) {
   const sellerStats = getSellerStats(filteredSales);
+  if (!sellerStats.length) {
+    return `
+      <section class="hero-panel">
+        <div class="hero-row">
+          <div class="hero-copy"><div class="section-eyebrow">Vendedores</div><h1>Vendedores</h1><p>Acompanhe o desempenho individual da equipe com métricas de meta, comissão, volume e histórico operacional.</p></div>
+          <div class="action-row"><button class="btn btn-primary" data-action="new-seller">Cadastrar vendedor</button></div>
+        </div>
+      </section>
+      <section class="panel">
+        ${renderEmptyState("Nenhum vendedor cadastrado", "Cadastre o primeiro vendedor para começar a montar seu time e acompanhar resultados no CRM.", "Cadastrar vendedor", "new-seller")}
+      </section>
+    `;
+  }
   return `
     <section class="hero-panel">
       <div class="hero-row">
@@ -1094,8 +1088,8 @@ function renderConfiguracoesPage() {
     <section class="hero-panel"><div class="hero-row"><div class="hero-copy"><div class="section-eyebrow">Configurações</div><h1>Configurações</h1><p>Ajustes gerais da plataforma preparados para futuras integrações, automações, usuários e parâmetros financeiros.</p></div></div></section>
     <section class="panel">
       <div class="section-header">
-        <div><div class="section-eyebrow">Dados locais</div><h3 style="margin:4px 0;">Gerenciamento dos dados salvos</h3><div class="panel-subtitle">Use esta opção para limpar os cadastros salvos no navegador e restaurar os dados demonstrativos.</div></div>
-        <div class="table-actions"><button class="btn btn-secondary" data-action="reset-data">Restaurar dados demo</button></div>
+        <div><div class="section-eyebrow">Dados locais</div><h3 style="margin:4px 0;">Gerenciamento dos dados salvos</h3><div class="panel-subtitle">Use esta opção para limpar os cadastros salvos no navegador e voltar o sistema para o estado inicial vazio.</div></div>
+        <div class="table-actions"><button class="btn btn-secondary" data-action="reset-data">Limpar dados salvos</button></div>
       </div>
     </section>
   `;
@@ -1540,7 +1534,7 @@ function attachEvents() {
       state.modalData = null;
       state.selectedSellerDetail = null;
       renderApp();
-      showToast("Dados restaurados", "Os dados demonstrativos foram restaurados no navegador.");
+      showToast("Dados limpos", "O sistema voltou para o estado inicial vazio.");
     }
     if (action === "sort-table") {
       const tableKey = button.getAttribute("data-table-key");
