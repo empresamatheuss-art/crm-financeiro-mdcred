@@ -279,14 +279,29 @@ function getFilteredCashFlow() {
 }
 
 function getDashboardMetrics(filteredSales) {
+  const profileSeller = getProfileSeller();
   const totalSales = filteredSales.reduce((sum, item) => sum + item.valor, 0);
   const totalCommission = filteredSales.reduce((sum, item) => sum + item.comissao, 0);
+  const ownSalesCommission = profileSeller
+    ? filteredSales
+        .filter((item) => item.vendedorId === profileSeller.id)
+        .reduce((sum, item) => sum + item.comissao, 0)
+    : 0;
   const ownerProfit = filteredSales.reduce((sum, item) => sum + item.comissaoGestor, 0);
   const totalCount = filteredSales.length;
   const avgTicket = totalCount ? totalSales / totalCount : 0;
   const goalPercent = goals[0].valor_meta ? (totalSales / goals[0].valor_meta) * 100 : 0;
   const received = filteredSales.filter((item) => item.status === "Recebido").reduce((sum, item) => sum + item.valor, 0);
-  return { totalSales, totalCommission, ownerProfit, totalCount, avgTicket, goalPercent, received };
+  return {
+    totalSales,
+    totalCommission,
+    ownSalesCommission,
+    ownerProfit,
+    totalCount,
+    avgTicket,
+    goalPercent,
+    received,
+  };
 }
 
 function getSellerStats(filteredSales) {
@@ -744,6 +759,7 @@ function renderDashboardPage(filteredSales) {
     <section class="kpi-grid">
       ${renderKpiCard("Total de Vendas", fmtCurrency(metrics.totalSales), "Resultado acumulado no período", "12,4% acima da última janela", "positive")}
       ${renderKpiCard("Total de Comissões", fmtCurrency(metrics.totalCommission), "Comissões geradas no período", "Repasse dentro da política atual", "positive")}
+      ${renderKpiCard("Minhas Comissões", fmtCurrency(metrics.ownSalesCommission), "Comissões das vendas feitas por você", "Separadas da equipe comercial", "positive")}
       ${renderKpiCard("Meu Lucro", fmtCurrency(metrics.ownerProfit), "Comissão recebida pela sua gestão", "Resultado direto das vendas da equipe", "positive")}
       ${renderKpiCard("Quantidade de Vendas", fmtInteger(metrics.totalCount), "Negociações concluídas", "Pipeline aquecido com novos contratos", "warning")}
       ${renderKpiCard("Ticket Médio", fmtCurrency(metrics.avgTicket), "Valor médio por venda", "Acima da média operacional", "positive")}
@@ -816,6 +832,7 @@ function renderFinanceiroPage(filteredSales) {
     <section class="kpi-grid">
       ${renderKpiCard("Total Recebido", fmtCurrency(metrics.received), "Soma total confirmada", "Conciliação saudável", "positive")}
       ${renderKpiCard("Comissão Total", fmtCurrency(metrics.totalCommission), "Comissão acumulada da equipe", "Repasse previsto para sexta", "warning")}
+      ${renderKpiCard("Minhas Comissões", fmtCurrency(metrics.ownSalesCommission), "Comissão das vendas lançadas por você", "Separadas da equipe comercial", "positive")}
       ${renderKpiCard("Meu Lucro", fmtCurrency(metrics.ownerProfit), "Comissão que entra para você", "Acompanhamento por venda cadastrada", "positive")}
       ${renderKpiCard("Ticket Médio", fmtCurrency(metrics.avgTicket), "Média de valor por negociação", "Baseado nas vendas filtradas", "positive")}
       ${renderKpiCard("Meta Atingida", fmtPercent(metrics.goalPercent), "Percentual sobre a meta geral", "Ritmo consistente da operação", "positive")}
