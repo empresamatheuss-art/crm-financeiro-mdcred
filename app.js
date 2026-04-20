@@ -16,6 +16,7 @@ const state = {
 
 const STORAGE_KEYS = {
   auth: "crm-financeiro-auth-v1",
+  profile: "crm-financeiro-profile-v1",
   sellers: "crm-financeiro-sellers-v2",
   sales: "crm-financeiro-sales-v2",
   goals: "crm-financeiro-goals-v2",
@@ -27,24 +28,16 @@ const bankOptions = ["V8", "SOMA", "LOTUS", "ICRED", "BANCO PAN", "BANCO C6", "G
 
 const defaultSales = [];
 
-const cashFlow = [
-  ["2026-04-16","Entrada","Recebimento Banco Pan","Venda",48250,"Confirmado"],
-  ["2026-04-16","Entrada","Recebimento Bradesco","Venda",27990,"Confirmado"],
-  ["2026-04-15","Saída","Repasse comissão Camila","Comissão",-3850,"Confirmado"],
-  ["2026-04-15","Entrada","Liquidação consignado","Venda",41200,"Pendente"],
-  ["2026-04-14","Saída","Taxa de gateway","Operacional",-1240,"Confirmado"],
-  ["2026-04-13","Entrada","Recebimento Banco Pan","Venda",52200,"Confirmado"],
-  ["2026-04-12","Saída","Estorno operação cancelada","Estorno",-24400,"Estornado"],
-  ["2026-04-10","Entrada","Recebimento Bradesco","Venda",29450,"Confirmado"],
-  ["2026-04-09","Entrada","Pagamento em conciliação","Venda",44800,"Atrasado"],
-  ["2026-04-08","Saída","Repasse comissão Thiago","Comissão",-1512,"Confirmado"],
-  ["2026-04-06","Saída","Taxa de antecipação","Operacional",-980,"Confirmado"],
-  ["2026-04-04","Entrada","Recebimento Santander","Venda",25120,"Confirmado"],
-];
+const cashFlow = [];
 
 const defaultGoals = [
   { nome: "Meta Geral", tipo: "Equipe", valor_meta: 0, valor_realizado: 0 },
 ];
+
+const defaultProfile = {
+  name: "Seu Nome",
+  role: "Seu cargo",
+};
 
 function canUseStorage() {
   return typeof localStorage !== "undefined";
@@ -80,9 +73,14 @@ function persistCRMData() {
   writeStorage(STORAGE_KEYS.goals, goals);
 }
 
+function persistProfile() {
+  writeStorage(STORAGE_KEYS.profile, profile);
+}
+
 const sellers = readStorage(STORAGE_KEYS.sellers, defaultSellers);
 const sales = readStorage(STORAGE_KEYS.sales, defaultSales);
 const goals = readStorage(STORAGE_KEYS.goals, defaultGoals);
+const profile = readStorage(STORAGE_KEYS.profile, defaultProfile);
 
 state.isAuthenticated = readStorage(STORAGE_KEYS.auth, false);
 
@@ -135,6 +133,15 @@ function slugify(text) {
 
 function normalizedName(text) {
   return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim().replace(/\s+/g, " ");
+}
+
+function getInitials(name) {
+  return String(name)
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("") || "PF";
 }
 
 function parseSale(entry) {
@@ -612,8 +619,8 @@ function renderTopbar() {
         <button class="btn btn-primary" data-action="new-sale">Nova venda</button>
         <button class="icon-btn" data-action="notifications">🔔</button>
         <div class="avatar">
-          <div class="avatar-circle">MC</div>
-          <div><strong>Maria Clara</strong><div class="helper-text">Diretoria comercial</div></div>
+          <div class="avatar-circle">${getInitials(profile.name)}</div>
+          <div><strong>${profile.name}</strong><div class="helper-text">${profile.role}</div></div>
         </div>
       </div>
     </header>
@@ -1096,6 +1103,18 @@ function renderConfiguracoesPage() {
     <section class="hero-panel"><div class="hero-row"><div class="hero-copy"><div class="section-eyebrow">Configurações</div><h1>Configurações</h1><p>Ajustes gerais da plataforma preparados para futuras integrações, automações, usuários e parâmetros financeiros.</p></div></div></section>
     <section class="panel">
       <div class="section-header">
+        <div><div class="section-eyebrow">Perfil</div><h3 style="margin:4px 0;">Personalização do usuário</h3><div class="panel-subtitle">Defina o nome e o cargo exibidos no topo da plataforma.</div></div>
+      </div>
+      <form id="profile-form" class="modal-grid" style="margin-top:18px;">
+        <label class="field"><span>Nome</span><input name="name" type="text" value="${profile.name}" placeholder="Seu nome" required /></label>
+        <label class="field"><span>Cargo</span><input name="role" type="text" value="${profile.role}" placeholder="Seu cargo" required /></label>
+        <div class="modal-actions">
+          <button class="btn btn-primary" type="submit">Salvar perfil</button>
+        </div>
+      </form>
+    </section>
+    <section class="panel">
+      <div class="section-header">
         <div><div class="section-eyebrow">Dados locais</div><h3 style="margin:4px 0;">Gerenciamento dos dados salvos</h3><div class="panel-subtitle">Use esta opção para limpar os cadastros salvos no navegador e voltar o sistema para o estado inicial vazio.</div></div>
         <div class="table-actions"><button class="btn btn-secondary" data-action="reset-data">Limpar dados salvos</button></div>
       </div>
@@ -1464,6 +1483,19 @@ function attachEvents() {
       state.modalData = null;
       renderApp();
       showToast(isEditingSeller ? "Vendedor atualizado" : "Vendedor cadastrado", "O cadastro foi salvo com sucesso.");
+    });
+  }
+
+  const profileForm = document.getElementById("profile-form");
+  if (profileForm) {
+    profileForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const formData = new FormData(profileForm);
+      profile.name = String(formData.get("name")).trim() || defaultProfile.name;
+      profile.role = String(formData.get("role")).trim() || defaultProfile.role;
+      persistProfile();
+      renderApp();
+      showToast("Perfil atualizado", "O cabeçalho da plataforma foi personalizado com sucesso.");
     });
   }
 
