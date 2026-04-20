@@ -620,7 +620,6 @@ function renderDonutChart(distribution) {
 
 function renderTopbar() {
   const page = pageMap[state.activePage];
-  const profileSeller = getProfileSeller();
   return `
     <header class="topbar">
       <div class="topbar-meta">
@@ -636,9 +635,8 @@ function renderTopbar() {
           <span>⌕</span>
           <input type="search" placeholder="Pesquisar" value="${state.searchTerm}" data-input="search" />
         </div>
-        ${profileSeller ? `<button class="btn btn-secondary" data-action="my-sales">Minhas vendas</button>` : ""}
         <button class="btn btn-secondary" data-action="export">Exportar relatório</button>
-        <button class="btn btn-primary" data-action="new-sale">${profileSeller ? "Lançar minha venda" : "Nova venda"}</button>
+        <button class="btn btn-primary" data-action="new-sale">Nova venda</button>
         <button class="icon-btn" data-action="notifications">🔔</button>
         <div class="avatar">
           <div class="avatar-circle">${getInitials(profile.name)}</div>
@@ -682,7 +680,6 @@ function renderSidebar(filteredSales) {
 
 function renderFilters() {
   const statusOptions = ["Recebido", "Pendente", "Em análise", "Cancelado", "Confirmado", "Atrasado", "Estornado"];
-  const profileSeller = getProfileSeller();
   return `
     <div class="panel">
       <div class="section-header">
@@ -693,7 +690,6 @@ function renderFilters() {
         </div>
         <div class="table-actions">
           <button class="btn btn-secondary" data-action="refresh">Atualizar dados</button>
-          ${profileSeller ? `<button class="btn btn-secondary" data-action="my-sales">Ver minhas vendas</button>` : ""}
           <button class="btn btn-secondary" data-action="clear-filters">Limpar filtros</button>
         </div>
       </div>
@@ -952,13 +948,12 @@ function renderFluxoPage() {
 
 function renderVendedoresPage(filteredSales) {
   const sellerStats = getSellerStats(filteredSales);
-  const profileSeller = getProfileSeller();
   if (!sellerStats.length) {
     return `
       <section class="hero-panel">
         <div class="hero-row">
           <div class="hero-copy"><div class="section-eyebrow">Vendedores</div><h1>Vendedores</h1><p>Acompanhe o desempenho individual da equipe com métricas de meta, comissão, volume e histórico operacional.</p></div>
-          <div class="action-row">${profileSeller ? `<button class="btn btn-secondary" data-action="my-sales">Minhas vendas</button>` : ""}<button class="btn btn-primary" data-action="new-seller">Cadastrar vendedor</button></div>
+          <div class="action-row"><button class="btn btn-primary" data-action="new-seller">Cadastrar vendedor</button></div>
         </div>
       </section>
       <section class="panel">
@@ -970,7 +965,7 @@ function renderVendedoresPage(filteredSales) {
     <section class="hero-panel">
       <div class="hero-row">
         <div class="hero-copy"><div class="section-eyebrow">Vendedores</div><h1>Vendedores</h1><p>Acompanhe o desempenho individual da equipe com métricas de meta, comissão, volume e histórico operacional.</p></div>
-        <div class="action-row">${profileSeller ? `<button class="btn btn-secondary" data-action="my-sales">Minhas vendas</button>` : ""}<button class="btn btn-primary" data-action="new-seller">Cadastrar vendedor</button></div>
+        <div class="action-row"><button class="btn btn-primary" data-action="new-seller">Cadastrar vendedor</button></div>
       </div>
     </section>
     <section class="two-column">
