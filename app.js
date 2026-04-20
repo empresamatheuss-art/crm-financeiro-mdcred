@@ -243,6 +243,33 @@ function parseCashFlow(entry) {
   return { data: entry[0], tipo: entry[1], descricao: entry[2], categoria: entry[3], valor: entry[4], status: entry[5] };
 }
 
+function getCashFlowStatusFromSale(status) {
+  if (status === "Recebido") return "Confirmado";
+  if (status === "Cancelado") return "Estornado";
+  return "Pendente";
+}
+
+function getCashFlowTypeFromSale(status) {
+  return status === "Cancelado" ? "Ajuste" : "Entrada";
+}
+
+function saleToCashFlowEntry(sale) {
+  const flowStatus = getCashFlowStatusFromSale(sale.status);
+  const amount = flowStatus === "Estornado" ? -Math.abs(sale.valor) : sale.valor;
+  const productLabel = sale.produto ? ` • ${sale.produto}` : "";
+  return {
+    data: sale.data,
+    tipo: getCashFlowTypeFromSale(sale.status),
+    descricao: `${sale.cliente}${productLabel}`,
+    categoria: "Vendas",
+    valor: amount,
+    status: flowStatus,
+    vendedorId: sale.vendedorId,
+    banco: sale.banco,
+    origem: "sale",
+  };
+}
+
 function getDays(period) {
   return { "7": 7, "30": 30, "90": 90, "180": 180 }[period] ?? 30;
 }
@@ -271,9 +298,12 @@ function getFilteredSales() {
 
 function getFilteredCashFlow() {
   const limit = getDateLimit();
-  return cashFlow
-    .map(parseCashFlow)
+  const saleEntries = sales.map(parseSale).map(saleToCashFlowEntry);
+  const manualEntries = cashFlow.map(parseCashFlow);
+  return [...saleEntries, ...manualEntries]
     .filter((entry) => new Date(`${entry.data}T00:00:00`) >= limit)
+    .filter((entry) => state.selectedSeller === "all" || !entry.vendedorId || entry.vendedorId === state.selectedSeller)
+    .filter((entry) => state.selectedBank === "all" || !entry.banco || entry.banco === state.selectedBank)
     .filter((entry) => state.selectedStatus === "all" || slugify(entry.status) === slugify(state.selectedStatus))
     .filter((entry) => matchesSearch(`${entry.tipo} ${entry.descricao} ${entry.categoria} ${entry.status}`));
 }
