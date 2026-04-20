@@ -15,6 +15,7 @@ const state = {
 };
 
 const STORAGE_KEYS = {
+  auth: "crm-financeiro-auth-v1",
   sellers: "crm-financeiro-sellers-v2",
   sales: "crm-financeiro-sales-v2",
   goals: "crm-financeiro-goals-v2",
@@ -68,6 +69,11 @@ function writeStorage(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
+function removeStorage(key) {
+  if (!canUseStorage()) return;
+  localStorage.removeItem(key);
+}
+
 function persistCRMData() {
   writeStorage(STORAGE_KEYS.sellers, sellers);
   writeStorage(STORAGE_KEYS.sales, sales);
@@ -77,6 +83,8 @@ function persistCRMData() {
 const sellers = readStorage(STORAGE_KEYS.sellers, defaultSellers);
 const sales = readStorage(STORAGE_KEYS.sales, defaultSales);
 const goals = readStorage(STORAGE_KEYS.goals, defaultGoals);
+
+state.isAuthenticated = readStorage(STORAGE_KEYS.auth, false);
 
 function ensureEntityIds() {
   sellers.forEach((seller) => {
@@ -1346,6 +1354,7 @@ function attachEvents() {
     loginForm.addEventListener("submit", (event) => {
       event.preventDefault();
       state.isAuthenticated = true;
+      writeStorage(STORAGE_KEYS.auth, true);
       renderApp();
       showToast("Acesso liberado", "Ambiente carregado com os dados mais recentes.");
     });
