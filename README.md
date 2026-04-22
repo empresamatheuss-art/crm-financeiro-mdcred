@@ -86,6 +86,53 @@ window.CRM_SUPABASE_CONFIG = {
 5. No painel do Supabase, deixe o login por e-mail e senha habilitado.
 6. Publique novamente o projeto na Vercel.
 
+## Observabilidade e automações
+
+O projeto agora já está preparado para:
+
+- Sentry
+- Vercel Web Analytics
+- Supabase Edge Functions
+
+### Sentry
+
+1. Crie um projeto Browser JavaScript no Sentry.
+2. Copie o DSN público.
+3. Abra [monitoring-config.js](./monitoring-config.js).
+4. Preencha `sentry.dsn`.
+
+### Vercel Web Analytics
+
+1. No painel da Vercel, abra o projeto.
+2. Entre em `Analytics` e clique em `Enable`.
+3. Siga o quickstart da Vercel para obter o `script.js` do projeto.
+4. Abra [monitoring-config.js](./monitoring-config.js).
+5. Ative `analytics.enabled = true` e preencha `analytics.scriptPath`.
+
+### Supabase Edge Functions
+
+As funções já foram criadas em:
+
+- [supabase/functions/export-report/index.ts](./supabase/functions/export-report/index.ts)
+- [supabase/functions/sales-automation/index.ts](./supabase/functions/sales-automation/index.ts)
+
+Para publicar:
+
+```bash
+supabase functions deploy export-report
+supabase functions deploy sales-automation
+```
+
+Depois, em [monitoring-config.js](./monitoring-config.js), ative:
+
+```js
+edgeFunctions: {
+  enabled: true,
+  exportReportName: "export-report",
+  automationName: "sales-automation",
+}
+```
+
 ## Deploy
 
 O projeto está preparado para deploy estático no Vercel.
@@ -102,10 +149,15 @@ vercel --prod
 .
 ├── app.js
 ├── index.html
+├── monitoring-config.js
 ├── styles.css
 ├── server.js
 ├── supabase-config.js
 ├── supabase/
+│   ├── functions/
+│   │   ├── _shared/
+│   │   ├── export-report/
+│   │   └── sales-automation/
 │   └── schema.sql
 └── README.md
 ```

@@ -45,12 +45,46 @@ const defaultProfile = {
 
 const SUPABASE_TABLE = "crm_snapshots";
 const remoteConfig = window.CRM_SUPABASE_CONFIG ?? { url: "", anonKey: "" };
+const monitoringConfig = window.CRM_MONITORING_CONFIG ?? {
+  sentry: {
+    dsn: "",
+    environment: "production",
+    release: "crm-financeiro@local",
+    tracesSampleRate: 0.2,
+    replaysSessionSampleRate: 0,
+    replaysOnErrorSampleRate: 1,
+  },
+  analytics: {
+    enabled: false,
+    scriptPath: "",
+    debug: false,
+  },
+  edgeFunctions: {
+    enabled: false,
+    exportReportName: "export-report",
+    automationName: "sales-automation",
+  },
+};
 
 let supabaseClient = null;
 let authListenerBound = false;
+let sentryInitPromise = null;
+let lastTrackedPage = "";
 
 function hasCloudSync() {
   return Boolean(remoteConfig.url && remoteConfig.anonKey && window.supabase?.createClient);
+}
+
+function hasSentry() {
+  return Boolean(monitoringConfig.sentry?.dsn);
+}
+
+function hasAnalytics() {
+  return Boolean(monitoringConfig.analytics?.enabled && monitoringConfig.analytics?.scriptPath);
+}
+
+function hasEdgeFunctions() {
+  return Boolean(hasCloudSync() && monitoringConfig.edgeFunctions?.enabled);
 }
 
 function getSupabaseClient() {
@@ -87,6 +121,110 @@ function writeStorage(key, value) {
 function removeStorage(key) {
   if (!canUseStorage()) return;
   localStorage.removeItem(key);
+}
+
+function loadExternalScript(src) {
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[src="${src}"]`);
+    if (existing) {
+      if (existing.dataset.loaded === "true") {
+        resolve();
+        return;
+      }
+      existing.addEventListener("load", () => resolve(), { once: true });
+      existing.addEventListener("error", () => reject(new Error(`Falha ao carregar ${src}`)), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = true;
+    script.crossOrigin = "anonymous";
+    script.addEventListener("load", () => {
+      script.dataset.loaded = "true";
+      resolve();
+    }, { once: true });
+    script.addEventListener("error", () => reject(new Error(`Falha ao carregar ${src}`)), { once: true });
+    document.head.appendChild(script);
+  });
+}
+
+function ensureAnalytics() {
+  if (!monitoringConfig.analytics?.enabled) return;
+  window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+  if (!monitoringConfig.analytics.scriptPath) return;
+  void loadExternalScript(monitoringConfig.analytics.scriptPath).catch((error) => console.error("Vercel Analytics:", error));
+}
+
+function ensureSentry() {
+  if (!hasSentry()) return Promise.resolve(null);
+  if (window.Sentry) return Promise.resolve(window.Sentry);
+  if (sentryInitPromise) return sentryInitPromise;
+
+  sentryInitPromise = loadExternalScript("https://browser.sentry-cdn.com/10.22.0/bundle.tracing.replay.min.js")
+    .then(() => {
+      if (!window.Sentry) return null;
+
+      const integrations = [window.Sentry.browserTracingIntegration()];
+      if (hasCloudSync() && window.Sentry.supabaseIntegration) {
+        integrations.push(window.Sentry.supabaseIntegration({ supabaseClient: getSupabaseClient() }));
+      }
+      if (window.Sentry.replayIntegration) {
+        integrations.push(window.Sentry.replayIntegration());
+      }
+
+      window.Sentry.init({
+        dsn: monitoringConfig.sentry.dsn,
+        environment: monitoringConfig.sentry.environment,
+        release: monitoringConfig.sentry.release,
+        integrations,
+        tracesSampleRate: monitoringConfig.sentry.tracesSampleRate,
+        replaysSessionSampleRate: monitoringConfig.sentry.replaysSessionSampleRate,
+        replaysOnErrorSampleRate: monitoringConfig.sentry.replaysOnErrorSampleRate,
+        tracePropagationTargets: [window.location.origin, remoteConfig.url].filter(Boolean),
+      });
+
+      return window.Sentry;
+    })
+    .catch((error) => {
+      console.error("Sentry:", error);
+      return null;
+    });
+
+  return sentryInitPromise;
+}
+
+function trackEvent(name, data = {}) {
+  const payload = {
+    page: state.activePage,
+    period: state.selectedPeriod,
+    seller: state.selectedSeller,
+    bank: state.selectedBank,
+    status: state.selectedStatus,
+    ...data,
+  };
+
+  if (typeof window.va === "function") {
+    window.va("event", name, payload);
+  }
+
+  if (window.Sentry?.addBreadcrumb) {
+    window.Sentry.addBreadcrumb({
+      category: "crm.event",
+      message: name,
+      level: "info",
+      data: payload,
+    });
+  }
+}
+
+async function invokeEdgeFunction(functionName, payload) {
+  if (!hasEdgeFunctions()) return null;
+  const client = getSupabaseClient();
+  if (!client) return null;
+  const { data, error } = await client.functions.invoke(functionName, { body: payload });
+  if (error) throw error;
+  return data;
 }
 
 function persistLocalSnapshot() {
@@ -551,6 +689,20 @@ function getCloudStatusMeta() {
   };
 }
 
+function getObservabilityStatusMeta() {
+  return {
+    sentry: hasSentry()
+      ? "Sentry configurado para rastrear erros, performance e falhas no navegador."
+      : "Adicione o DSN do Sentry em monitoring-config.js para ativar o rastreamento real.",
+    analytics: hasAnalytics()
+      ? "Vercel Analytics preparado para pageviews e eventos do CRM."
+      : "Habilite Web Analytics na Vercel e informe o scriptPath em monitoring-config.js.",
+    edge: hasEdgeFunctions()
+      ? "Edge Functions habilitadas para exportações e automações."
+      : "As funções estão preparadas em supabase/functions, mas ainda precisam ser implantadas e habilitadas.",
+  };
+}
+
 function getCloudErrorMessage(error) {
   if (error?.code === "PGRST205") {
     return "A tabela do CRM ainda não foi criada no Supabase. Execute o SQL de instalação para concluir a nuvem.";
@@ -623,6 +775,7 @@ function getCurrentExportData() {
 
 function exportCurrentView(kind = "csv") {
   const dataset = getCurrentExportData();
+  trackEvent("export_requested", { kind, dataset: dataset.filename });
   if (kind === "pdf") {
     const html = `
       <!DOCTYPE html>
@@ -1336,6 +1489,7 @@ function renderRelatoriosPage(filteredSales) {
 function renderConfiguracoesPage() {
   const profileSeller = getProfileSeller();
   const cloudMeta = getCloudStatusMeta();
+  const observabilityMeta = getObservabilityStatusMeta();
   return `
     <section class="hero-panel"><div class="hero-row"><div class="hero-copy"><div class="section-eyebrow">Configurações</div><h1>Configurações</h1><p>Ajustes gerais da plataforma preparados para futuras integrações, automações, usuários e parâmetros financeiros.</p></div></div></section>
     <section class="panel">
@@ -1366,6 +1520,16 @@ function renderConfiguracoesPage() {
         <strong>${cloudMeta.title}</strong>
         <p class="panel-subtitle">${cloudMeta.description}</p>
         <div class="helper-text">${hasCloudSync() ? "Quando a nuvem estiver ativa, seus dados passam a acompanhar seu login em qualquer dispositivo." : "Preencha o arquivo supabase-config.js e execute o SQL em supabase/schema.sql para ativar a nuvem."}</div>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="section-header">
+        <div><div class="section-eyebrow">Observabilidade</div><h3 style="margin:4px 0;">Monitoramento e analytics</h3><div class="panel-subtitle">Tecnologias preparadas para monitorar erros, uso do sistema e automações no servidor.</div></div>
+      </div>
+      <div class="mini-list" style="margin-top:18px;">
+        <div class="mini-list-item"><div><strong>Sentry</strong><div class="helper-text">${observabilityMeta.sentry}</div></div><span class="mini-tag">${hasSentry() ? "Pronto" : "Pendente"}</span></div>
+        <div class="mini-list-item"><div><strong>Analytics</strong><div class="helper-text">${observabilityMeta.analytics}</div></div><span class="mini-tag">${hasAnalytics() ? "Pronto" : "Pendente"}</span></div>
+        <div class="mini-list-item"><div><strong>Edge Functions</strong><div class="helper-text">${observabilityMeta.edge}</div></div><span class="mini-tag">${hasEdgeFunctions() ? "Pronto" : "Pendente"}</span></div>
       </div>
     </section>
   `;
@@ -1696,6 +1860,7 @@ function attachEvents() {
         state.isAuthenticated = true;
         setLocalAuthState(true);
         renderApp();
+        trackEvent("login_success_local");
         showToast("Acesso liberado", "Ambiente carregado com os dados salvos neste navegador.");
         return;
       }
@@ -1770,6 +1935,7 @@ function attachEvents() {
       }
       state.isLoading = false;
       renderApp();
+      trackEvent("login_success_cloud");
       showToast("Acesso liberado", "Ambiente carregado com os dados mais recentes da nuvem.");
     });
   }
@@ -1930,6 +2096,7 @@ function attachEvents() {
   document.querySelectorAll("[data-page]").forEach((button) => button.addEventListener("click", () => {
     state.activePage = button.getAttribute("data-page");
     state.sidebarOpen = false;
+    trackEvent("page_navigation", { destination: state.activePage });
     renderApp();
   }));
 
@@ -1962,6 +2129,7 @@ function attachEvents() {
     }
     if (action === "notifications") showToast("Central de alertas", "2 vendas pendentes e 1 operação em análise.");
     if (action === "refresh") {
+      trackEvent("refresh_requested");
       if (await refreshCloudSnapshot()) {
         renderApp();
         showToast("Dados atualizados", "Os indicadores foram recarregados da nuvem com sucesso.");
@@ -1984,6 +2152,7 @@ function attachEvents() {
       setLocalAuthState(false);
       state.modal = null;
       state.modalData = null;
+      trackEvent("logout");
       renderApp();
     }
     if (action === "clear-filters") {
@@ -1992,6 +2161,7 @@ function attachEvents() {
       state.selectedBank = "all";
       state.selectedStatus = "all";
       state.searchTerm = "";
+      trackEvent("filters_cleared");
       renderApp();
     }
     if (action === "seller-detail" || action === "seller-history") {
@@ -2089,9 +2259,17 @@ function renderApp() {
   const root = document.getElementById("app");
   root.innerHTML = state.isLoading ? renderLoading() : (state.isAuthenticated ? renderAppShell() : renderLogin());
   attachEvents();
+
+  const pageKey = state.isAuthenticated ? state.activePage : "login";
+  if (pageKey !== lastTrackedPage) {
+    trackEvent("page_view", { page: pageKey });
+    lastTrackedPage = pageKey;
+  }
 }
 
 async function initApp() {
+  ensureAnalytics();
+  await ensureSentry();
   if (!hasCloudSync()) {
     state.isLoading = false;
     renderApp();
