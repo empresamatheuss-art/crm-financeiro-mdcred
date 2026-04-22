@@ -692,20 +692,6 @@ function getCloudStatusMeta() {
   };
 }
 
-function getObservabilityStatusMeta() {
-  return {
-    sentry: hasSentry()
-      ? "Sentry configurado para rastrear erros, performance e falhas no navegador."
-      : "Adicione o DSN do Sentry em monitoring-config.js para ativar o rastreamento real.",
-    analytics: hasAnalytics()
-      ? "Vercel Analytics preparado para pageviews e eventos do CRM."
-      : "Habilite Web Analytics na Vercel e informe o scriptPath em monitoring-config.js.",
-    edge: hasEdgeFunctions()
-      ? "Edge Functions habilitadas para exportações e automações."
-      : "As funções estão preparadas em supabase/functions, mas ainda precisam ser implantadas e habilitadas.",
-  };
-}
-
 function getCloudErrorMessage(error) {
   if (error?.code === "PGRST205") {
     return "A tabela do CRM ainda não foi criada no Supabase. Execute o SQL de instalação para concluir a nuvem.";
@@ -1493,7 +1479,6 @@ function renderRelatoriosPage(filteredSales) {
 function renderConfiguracoesPage() {
   const profileSeller = getProfileSeller();
   const cloudMeta = getCloudStatusMeta();
-  const observabilityMeta = getObservabilityStatusMeta();
   return `
     <section class="hero-panel"><div class="hero-row"><div class="hero-copy"><div class="section-eyebrow">Configurações</div><h1>Configurações</h1><p>Ajustes gerais da plataforma preparados para futuras integrações, automações, usuários e parâmetros financeiros.</p></div></div></section>
     <section class="panel">
@@ -1526,16 +1511,7 @@ function renderConfiguracoesPage() {
         <div class="helper-text">${hasCloudSync() ? "Quando a nuvem estiver ativa, seus dados passam a acompanhar seu login em qualquer dispositivo." : "Preencha o arquivo supabase-config.js e execute o SQL em supabase/schema.sql para ativar a nuvem."}</div>
       </div>
     </section>
-    <section class="panel">
-      <div class="section-header">
-        <div><div class="section-eyebrow">Observabilidade</div><h3 style="margin:4px 0;">Monitoramento e analytics</h3><div class="panel-subtitle">Tecnologias preparadas para monitorar erros, uso do sistema e automações no servidor.</div></div>
-      </div>
-      <div class="mini-list" style="margin-top:18px;">
-        <div class="mini-list-item"><div><strong>Sentry</strong><div class="helper-text">${observabilityMeta.sentry}</div></div><span class="mini-tag">${hasSentry() ? "Pronto" : "Pendente"}</span></div>
-        <div class="mini-list-item"><div><strong>Analytics</strong><div class="helper-text">${observabilityMeta.analytics}</div></div><span class="mini-tag">${hasAnalytics() ? "Pronto" : "Pendente"}</span></div>
-        <div class="mini-list-item"><div><strong>Edge Functions</strong><div class="helper-text">${observabilityMeta.edge}</div></div><span class="mini-tag">${hasEdgeFunctions() ? "Pronto" : "Pendente"}</span></div>
-      </div>
-    </section>
+
   `;
 }
 
@@ -2311,4 +2287,5 @@ async function initApp() {
 }
 
 void initApp();
+
 
