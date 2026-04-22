@@ -372,6 +372,10 @@ button { cursor: pointer; border: 0; background: none; }
   gap: 12px;
 }
 
+.topbar-actions .btn {
+  min-height: 46px;
+}
+
 .period-pill, .badge, .mini-tag {
   display: inline-flex;
   align-items: center;
@@ -1196,6 +1200,14 @@ tbody tr:hover { background: rgba(36, 107, 255, 0.05); }
   .searchbox {
     min-width: 120px;
     flex-basis: 130px;
+  }
+
+  .topbar-actions .btn.btn-secondary,
+  .topbar-actions .btn.btn-primary {
+    width: 130px;
+    min-width: 130px;
+    min-height: 38px;
+    padding: 10px 12px;
   }
 
   .searchbox input {
