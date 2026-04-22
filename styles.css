@@ -231,6 +231,7 @@ button { cursor: pointer; border: 0; background: none; }
   min-height: 100vh;
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  align-items: start;
 }
 
 .app-sidebar {
@@ -326,7 +327,10 @@ button { cursor: pointer; border: 0; background: none; }
   line-height: 1.35;
 }
 
-.app-content { padding: 22px 22px 28px 20px; }
+.app-content {
+  padding: 22px 22px 28px 20px;
+  min-width: 0;
+}
 
 .topbar {
   border-radius: 30px;
@@ -335,10 +339,22 @@ button { cursor: pointer; border: 0; background: none; }
   align-items: center;
   justify-content: space-between;
   gap: 18px;
+  flex-wrap: wrap;
 }
 
 .page-title { margin: 0; font-size: 1.55rem; }
-.topbar-meta { align-items: center; }
+.topbar-meta {
+  align-items: center;
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.topbar-actions {
+  align-items: center;
+  justify-content: flex-end;
+  flex: 999 1 720px;
+  flex-wrap: wrap;
+}
 
 .period-pill, .badge, .mini-tag {
   display: inline-flex;
@@ -356,7 +372,11 @@ button { cursor: pointer; border: 0; background: none; }
   color: var(--muted-strong);
 }
 
-.searchbox { min-width: 240px; position: relative; }
+.searchbox {
+  min-width: 220px;
+  flex: 1 1 220px;
+  position: relative;
+}
 .searchbox input { padding-left: 42px; }
 .searchbox span {
   position: absolute;
@@ -383,6 +403,18 @@ button { cursor: pointer; border: 0; background: none; }
   border-radius: 18px;
   background: var(--surface-alt);
   border: 1px solid var(--border);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.avatar > div:last-child {
+  min-width: 0;
+}
+
+.avatar strong,
+.avatar .helper-text {
+  display: block;
+  overflow-wrap: anywhere;
 }
 
 .avatar-circle {
@@ -899,6 +931,22 @@ tbody tr:hover { background: rgba(36, 107, 255, 0.05); }
 @media (max-width: 1240px) {
   .kpi-grid, .hero-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .two-column, .seller-grid, .report-grid, .settings-grid, .goals-grid { grid-template-columns: 1fr; }
+  .topbar {
+    align-items: flex-start;
+  }
+  .topbar-actions {
+    justify-content: flex-start;
+    flex: 1 1 100%;
+  }
+  .period-pill {
+    max-width: 100%;
+    white-space: normal;
+  }
+  .btn,
+  .icon-btn,
+  .avatar {
+    flex-shrink: 0;
+  }
 }
 
 @media (max-width: 980px) {
@@ -920,6 +968,10 @@ tbody tr:hover { background: rgba(36, 107, 255, 0.05); }
   .mobile-sidebar-toggle { display: inline-flex; }
   .app-content { padding: 16px; }
   .topbar { flex-direction: column; align-items: stretch; }
+  .topbar-meta,
+  .topbar-actions {
+    width: 100%;
+  }
 }
 
 @media (max-width: 720px) {
