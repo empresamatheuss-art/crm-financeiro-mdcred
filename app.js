@@ -839,7 +839,6 @@ function renderTopbar() {
           <div class="avatar-circle">${getInitials(profile.name)}</div>
           <div class="avatar-text"><strong>${profile.name}</strong><div class="helper-text">${profile.role}</div></div>
         </div>
-        <button class="btn btn-secondary" data-action="logout">Sair</button>
       </div>
     </header>
   `;
@@ -870,6 +869,7 @@ function renderSidebar(filteredSales) {
         <h3 style="margin:6px 0;">Recebimento confirmado</h3>
         <strong>${fmtCurrency(metrics.received)}</strong>
         <div class="helper-text">Baseada nos filtros ativos e vendas recebidas.</div>
+        <button class="btn btn-secondary sidebar-logout" data-action="logout">Sair</button>
       </div>
     </aside>
   `;

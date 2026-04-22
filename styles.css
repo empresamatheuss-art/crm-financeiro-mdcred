@@ -327,6 +327,12 @@ button { cursor: pointer; border: 0; background: none; }
   line-height: 1.35;
 }
 
+.sidebar-logout {
+  width: 100%;
+  margin-top: 10px;
+  justify-content: center;
+}
+
 .app-content {
   padding: 22px 22px 28px 20px;
   min-width: 0;
