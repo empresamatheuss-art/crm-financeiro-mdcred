@@ -835,9 +835,8 @@ function renderTopbar() {
         <button class="btn btn-secondary" data-action="export">Exportar relatório</button>
         <button class="btn btn-primary" data-action="new-sale">Nova venda</button>
         <button class="icon-btn" data-action="notifications">🔔</button>
-        <div class="avatar">
+        <div class="avatar avatar-compact" aria-label="${profile.name}">
           <div class="avatar-circle">${getInitials(profile.name)}</div>
-          <div class="avatar-text"><strong>${profile.name}</strong><div class="helper-text">${profile.role}</div></div>
         </div>
       </div>
     </header>
