@@ -416,6 +416,8 @@ button { cursor: pointer; border: 0; background: none; }
   border: 1px solid var(--border);
   min-width: 0;
   max-width: 100%;
+  overflow: hidden;
+  flex-shrink: 0;
 }
 
 .avatar-text {
@@ -1122,7 +1124,7 @@ tbody tr:hover { background: rgba(36, 107, 255, 0.05); }
   }
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 1420px) {
   .avatar {
     width: 46px;
     min-width: 46px;
