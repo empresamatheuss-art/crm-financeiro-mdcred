@@ -339,21 +339,21 @@ button { cursor: pointer; border: 0; background: none; }
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  flex-wrap: wrap;
 }
 
 .page-title { margin: 0; font-size: 1.55rem; }
 .topbar-meta {
   align-items: center;
-  flex: 1 1 220px;
+  flex: 0 1 auto;
   min-width: 0;
 }
 
 .topbar-actions {
   align-items: center;
   justify-content: flex-end;
-  flex: 999 1 720px;
-  flex-wrap: wrap;
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 
 .period-pill, .badge, .mini-tag {
@@ -373,7 +373,7 @@ button { cursor: pointer; border: 0; background: none; }
 }
 
 .searchbox {
-  min-width: 220px;
+  min-width: 180px;
   flex: 1 1 220px;
   position: relative;
 }
@@ -933,10 +933,12 @@ tbody tr:hover { background: rgba(36, 107, 255, 0.05); }
   .two-column, .seller-grid, .report-grid, .settings-grid, .goals-grid { grid-template-columns: 1fr; }
   .topbar {
     align-items: flex-start;
+    flex-wrap: wrap;
   }
   .topbar-actions {
     justify-content: flex-start;
     flex: 1 1 100%;
+    flex-wrap: wrap;
   }
   .period-pill {
     max-width: 100%;
