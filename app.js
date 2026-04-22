@@ -386,7 +386,10 @@ const navItems = [
 const todayISO = new Date().toISOString().slice(0, 10);
 
 const fmtCurrency = (value) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
-const fmtPercent = (value) => `${value.toFixed(1).replace(".", ",")}%`;
+const fmtPercent = (value) => {
+  const safeValue = Number.isFinite(value) ? value : 0;
+  return `${safeValue.toFixed(1).replace(".", ",")}%`;
+};
 const fmtInteger = (value) => new Intl.NumberFormat("pt-BR").format(value);
 const fmtDate = (value) => new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" }).format(new Date(`${value}T00:00:00`));
 
@@ -1392,20 +1395,21 @@ function renderVendedoresPage(filteredSales) {
 function renderMetasPage(filteredSales) {
   const sellerStats = getSellerStats(filteredSales);
   const total = filteredSales.reduce((sum, sale) => sum + sale.valor, 0);
-  const teamPercent = (total / goals[0].valor_meta) * 100;
+  const teamGoal = goals[0]?.valor_meta ?? 0;
+  const teamPercent = teamGoal > 0 ? (total / teamGoal) * 100 : 0;
   return `
     <section class="hero-panel"><div class="hero-row"><div class="hero-copy"><div class="section-eyebrow">Metas</div><h1>Metas</h1><p>Acompanhe a evolução das metas da equipe e dos vendedores com alta clareza visual e leitura executiva.</p></div></div></section>
     <section class="kpi-grid">
-      ${renderKpiCard("Meta Geral", fmtCurrency(goals[0].valor_meta), "Objetivo mensal da equipe", "Direcionamento estratégico", "positive")}
+      ${renderKpiCard("Meta Geral", fmtCurrency(teamGoal), "Objetivo mensal da equipe", "Direcionamento estratégico", "positive")}
       ${renderKpiCard("Realizado Geral", fmtCurrency(total), "Resultado consolidado", "Volume computado pelos filtros", "positive")}
       ${renderKpiCard("Percentual Concluído", fmtPercent(teamPercent), "Progresso sobre a meta", "Ritmo da operação", "warning")}
-      ${renderKpiCard("Falta para Meta", fmtCurrency(Math.max(goals[0].valor_meta - total, 0)), "Restante para o objetivo", "Monitorar cadência semanal", "warning")}
+      ${renderKpiCard("Falta para Meta", fmtCurrency(Math.max(teamGoal - total, 0)), "Restante para o objetivo", "Monitorar cadência semanal", "warning")}
     </section>
     <section class="goals-grid">
       <div class="goal-card">
         <div class="section-eyebrow">Meta da Equipe</div><h3 style="margin:4px 0;">Visão consolidada da operação</h3>
         <span class="goal-value">${fmtPercent(teamPercent)}</span>
-        <p>${fmtCurrency(total)} de ${fmtCurrency(goals[0].valor_meta)} realizados.</p>
+        <p>${fmtCurrency(total)} de ${fmtCurrency(teamGoal)} realizados.</p>
         <div class="progress-bar"><div class="progress-fill" style="width:${Math.min(teamPercent, 100)}%"></div></div>
       </div>
       <div class="goal-card">
