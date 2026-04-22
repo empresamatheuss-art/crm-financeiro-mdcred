@@ -837,7 +837,7 @@ function renderTopbar() {
         <button class="icon-btn" data-action="notifications">🔔</button>
         <div class="avatar">
           <div class="avatar-circle">${getInitials(profile.name)}</div>
-          <div><strong>${profile.name}</strong><div class="helper-text">${profile.role}</div></div>
+          <div class="avatar-text"><strong>${profile.name}</strong><div class="helper-text">${profile.role}</div></div>
         </div>
         <button class="btn btn-secondary" data-action="logout">Sair</button>
       </div>
