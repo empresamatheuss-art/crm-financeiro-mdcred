@@ -12,6 +12,9 @@ const state = {
   modal: null,
   modalData: null,
   tableState: {},
+  isLoading: true,
+  authMode: "sign_in",
+  cloudStatus: "local",
 };
 
 const STORAGE_KEYS = {
@@ -39,6 +42,24 @@ const defaultProfile = {
   role: "Seu cargo",
   sellerId: "",
 };
+
+const SUPABASE_TABLE = "crm_snapshots";
+const remoteConfig = window.CRM_SUPABASE_CONFIG ?? { url: "", anonKey: "" };
+
+let supabaseClient = null;
+let authListenerBound = false;
+
+function hasCloudSync() {
+  return Boolean(remoteConfig.url && remoteConfig.anonKey && window.supabase?.createClient);
+}
+
+function getSupabaseClient() {
+  if (!hasCloudSync()) return null;
+  if (!supabaseClient) {
+    supabaseClient = window.supabase.createClient(remoteConfig.url, remoteConfig.anonKey);
+  }
+  return supabaseClient;
+}
 
 function canUseStorage() {
   return typeof localStorage !== "undefined";
@@ -68,14 +89,116 @@ function removeStorage(key) {
   localStorage.removeItem(key);
 }
 
-function persistCRMData() {
+function persistLocalSnapshot() {
   writeStorage(STORAGE_KEYS.sellers, sellers);
   writeStorage(STORAGE_KEYS.sales, sales);
   writeStorage(STORAGE_KEYS.goals, goals);
+  writeStorage(STORAGE_KEYS.profile, profile);
+}
+
+function setLocalAuthState(value) {
+  if (value) {
+    writeStorage(STORAGE_KEYS.auth, true);
+    return;
+  }
+  removeStorage(STORAGE_KEYS.auth);
+}
+
+function getSnapshotPayload() {
+  return {
+    sellers: cloneData(sellers),
+    sales: cloneData(sales),
+    goals: cloneData(goals),
+    profile: cloneData(profile),
+  };
+}
+
+function applySnapshot(snapshot) {
+  const nextSellers = Array.isArray(snapshot?.sellers) ? snapshot.sellers : cloneData(defaultSellers);
+  const nextSales = Array.isArray(snapshot?.sales) ? snapshot.sales : cloneData(defaultSales);
+  const nextGoals = Array.isArray(snapshot?.goals) && snapshot.goals.length ? snapshot.goals : cloneData(defaultGoals);
+  const nextProfile = snapshot?.profile && typeof snapshot.profile === "object"
+    ? { ...defaultProfile, ...snapshot.profile }
+    : cloneData(defaultProfile);
+
+  sellers.splice(0, sellers.length, ...cloneData(nextSellers));
+  sales.splice(0, sales.length, ...cloneData(nextSales));
+  goals.splice(0, goals.length, ...cloneData(nextGoals));
+  Object.assign(profile, cloneData(defaultProfile), cloneData(nextProfile));
+  ensureEntityIds();
+  persistLocalSnapshot();
+}
+
+async function loadSnapshotFromCloud(userId) {
+  const client = getSupabaseClient();
+  if (!client || !userId) return;
+
+  const { data, error } = await client
+    .from(SUPABASE_TABLE)
+    .select("sellers, sales, goals, profile")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  if (data) {
+    applySnapshot(data);
+    state.cloudStatus = "connected";
+    return;
+  }
+
+  const payload = getSnapshotPayload();
+  const { error: upsertError } = await client
+    .from(SUPABASE_TABLE)
+    .upsert({ user_id: userId, ...payload, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+
+  if (upsertError) throw upsertError;
+  applySnapshot(payload);
+  state.cloudStatus = "connected";
+}
+
+async function persistRemoteSnapshot() {
+  if (!hasCloudSync() || !state.isAuthenticated) return;
+
+  const client = getSupabaseClient();
+  if (!client) return;
+
+  const { data: sessionData, error: sessionError } = await client.auth.getSession();
+  if (sessionError || !sessionData.session) return;
+
+  const { error } = await client
+    .from(SUPABASE_TABLE)
+    .upsert(
+      {
+        user_id: sessionData.session.user.id,
+        ...getSnapshotPayload(),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" }
+    );
+
+  state.cloudStatus = error ? "error" : "connected";
+  if (error) console.error("Erro ao sincronizar com a nuvem:", error);
+}
+
+function persistCRMData() {
+  persistLocalSnapshot();
+  void persistRemoteSnapshot();
 }
 
 function persistProfile() {
-  writeStorage(STORAGE_KEYS.profile, profile);
+  persistLocalSnapshot();
+  void persistRemoteSnapshot();
+}
+
+async function refreshCloudSnapshot() {
+  if (!hasCloudSync()) return false;
+  const client = getSupabaseClient();
+  if (!client) return false;
+  const { data, error } = await client.auth.getSession();
+  if (error || !data.session) return false;
+  await loadSnapshotFromCloud(data.session.user.id);
+  return true;
 }
 
 const sellers = readStorage(STORAGE_KEYS.sellers, defaultSellers);
@@ -83,7 +206,8 @@ const sales = readStorage(STORAGE_KEYS.sales, defaultSales);
 const goals = readStorage(STORAGE_KEYS.goals, defaultGoals);
 const profile = readStorage(STORAGE_KEYS.profile, defaultProfile);
 
-state.isAuthenticated = readStorage(STORAGE_KEYS.auth, false);
+state.isAuthenticated = hasCloudSync() ? false : readStorage(STORAGE_KEYS.auth, false);
+state.cloudStatus = hasCloudSync() ? "configured" : "local";
 
 function ensureEntityIds() {
   sellers.forEach((seller) => {
@@ -389,6 +513,49 @@ function showToast(title, message) {
     state.notifications = state.notifications.filter((item) => item.id !== id);
     renderApp();
   }, 2600);
+}
+
+function getCloudStatusMeta() {
+  if (!hasCloudSync()) {
+    return {
+      label: "Modo local",
+      badgeClass: "badge pendente",
+      title: "Os dados ficam apenas neste navegador",
+      description: "Conecte o Supabase para acessar o CRM com os mesmos dados em qualquer computador.",
+    };
+  }
+
+  if (state.cloudStatus === "connected") {
+    return {
+      label: "Nuvem ativa",
+      badgeClass: "badge confirmado",
+      title: "Dados sincronizados com sua conta",
+      description: "Seu CRM está lendo e salvando informações na nuvem sempre que você estiver autenticado.",
+    };
+  }
+
+  if (state.cloudStatus === "error") {
+    return {
+      label: "Atenção",
+      badgeClass: "badge atrasado",
+      title: "Houve falha na sincronização",
+      description: "Revise as chaves do Supabase ou a tabela de dados para reativar a nuvem.",
+    };
+  }
+
+  return {
+    label: "Configurar",
+    badgeClass: "badge ativo",
+    title: "Supabase pronto para ser conectado",
+    description: "Preencha o arquivo de configuração com a URL do projeto e a chave pública para ativar a sincronização.",
+  };
+}
+
+function getCloudErrorMessage(error) {
+  if (error?.code === "PGRST205") {
+    return "A tabela do CRM ainda não foi criada no Supabase. Execute o SQL de instalação para concluir a nuvem.";
+  }
+  return error?.message || "Não foi possível sincronizar com o Supabase.";
 }
 
 function downloadBlob(filename, content, type) {
@@ -1153,6 +1320,7 @@ function renderRelatoriosPage(filteredSales) {
 
 function renderConfiguracoesPage() {
   const profileSeller = getProfileSeller();
+  const cloudMeta = getCloudStatusMeta();
   return `
     <section class="hero-panel"><div class="hero-row"><div class="hero-copy"><div class="section-eyebrow">Configurações</div><h1>Configurações</h1><p>Ajustes gerais da plataforma preparados para futuras integrações, automações, usuários e parâmetros financeiros.</p></div></div></section>
     <section class="panel">
@@ -1172,6 +1340,17 @@ function renderConfiguracoesPage() {
       <div class="section-header">
         <div><div class="section-eyebrow">Dados locais</div><h3 style="margin:4px 0;">Gerenciamento dos dados salvos</h3><div class="panel-subtitle">Use esta opção para limpar os cadastros salvos no navegador e voltar o sistema para o estado inicial vazio.</div></div>
         <div class="table-actions"><button class="btn btn-secondary" data-action="reset-data">Limpar dados salvos</button></div>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="section-header">
+        <div><div class="section-eyebrow">Sincronização</div><h3 style="margin:4px 0;">Dados em nuvem</h3><div class="panel-subtitle">Acompanhe o status da sua conexão com o Supabase e o modo atual do CRM.</div></div>
+      </div>
+      <div class="sync-card">
+        <span class="${cloudMeta.badgeClass}">${cloudMeta.label}</span>
+        <strong>${cloudMeta.title}</strong>
+        <p class="panel-subtitle">${cloudMeta.description}</p>
+        <div class="helper-text">${hasCloudSync() ? "Quando a nuvem estiver ativa, seus dados passam a acompanhar seu login em qualquer dispositivo." : "Preencha o arquivo supabase-config.js e execute o SQL em supabase/schema.sql para ativar a nuvem."}</div>
       </div>
     </section>
   `;
@@ -1300,7 +1479,7 @@ function renderModal() {
             <button class="icon-btn" data-action="close-modal">✕</button>
           </div>
           <form id="recovery-form" class="form-stack">
-            <label class="field"><span>E-mail</span><input name="email" type="email" value="diretoria@mdcred.com.br" required /></label>
+            <label class="field"><span>E-mail</span><input name="email" type="email" autocomplete="email" required /></label>
             <div class="modal-actions">
               <button class="btn btn-secondary" type="button" data-action="close-modal">Cancelar</button>
               <button class="btn btn-primary" type="submit">Enviar link</button>
@@ -1315,6 +1494,11 @@ function renderModal() {
 }
 
 function renderLogin() {
+  const cloudMeta = getCloudStatusMeta();
+  const primaryLabel = hasCloudSync() && state.authMode === "sign_up" ? "Criar acesso" : "Entrar";
+  const helperText = hasCloudSync()
+    ? "Use seu e-mail e senha para acessar os mesmos dados em qualquer computador."
+    : "O CRM está em modo local neste navegador. Configure o Supabase para sincronizar entre dispositivos.";
   return `
     <main class="login-shell">
       <section class="login-brand">
@@ -1332,15 +1516,38 @@ function renderLogin() {
         <div class="section-eyebrow">Acesse sua plataforma</div>
         <h2>Acesse sua plataforma</h2>
         <p>Entre para acompanhar suas vendas, comissões e resultados em tempo real.</p>
+        <div class="login-status">
+          <span class="${cloudMeta.badgeClass}">${cloudMeta.label}</span>
+          <div class="helper-text">${helperText}</div>
+        </div>
         <form id="login-form" class="form-stack">
-          <label class="field"><span>E-mail</span><input type="email" name="email" value="diretoria@mdcred.com.br" required /></label>
-          <label class="field"><span>Senha</span><input type="password" name="password" value="123456" required /></label>
-          <button class="btn btn-primary" type="submit">Entrar</button>
+          <label class="field"><span>E-mail</span><input type="email" name="email" autocomplete="email" required /></label>
+          <label class="field"><span>Senha</span><input type="password" name="password" autocomplete="${state.authMode === "sign_up" ? "new-password" : "current-password"}" required /></label>
+          <button class="btn btn-primary" type="submit">${primaryLabel}</button>
+          ${hasCloudSync() ? `<button class="btn link-btn" type="button" data-action="toggle-auth-mode">${state.authMode === "sign_up" ? "Já tenho acesso" : "Primeiro acesso? Criar conta"}</button>` : ""}
           <button class="btn link-btn" type="button" data-action="forgot-password">Esqueci minha senha</button>
         </form>
       </section>
     </main>
     ${renderModal()}
+  `;
+}
+
+function renderLoading() {
+  return `
+    <main class="login-shell">
+      <section class="login-brand">
+        <div class="brand-mark">MC</div>
+        <div class="brand-eyebrow" style="margin-top:20px;">CRM Financeiro</div>
+        <h1>Preparando seu ambiente.</h1>
+        <p>Estamos validando a sessão e carregando os dados mais recentes da plataforma.</p>
+      </section>
+      <section class="login-card">
+        <div class="section-eyebrow">Sincronização</div>
+        <h2>Carregando</h2>
+        <p>Aguarde enquanto o CRM organiza seu acesso e os dados operacionais.</p>
+      </section>
+    </main>
   `;
 }
 
@@ -1423,15 +1630,132 @@ function updateSalePreview(form) {
   if (ownerPreview) ownerPreview.textContent = fmtCurrency(value * (ownerPercent / 100));
 }
 
+function bindCloudAuthListener() {
+  if (!hasCloudSync() || authListenerBound) return;
+  const client = getSupabaseClient();
+  if (!client) return;
+
+  client.auth.onAuthStateChange((_event, session) => {
+    if (!session) {
+      state.isAuthenticated = false;
+      state.cloudStatus = hasCloudSync() ? "configured" : "local";
+      setLocalAuthState(false);
+      state.isLoading = false;
+      renderApp();
+      return;
+    }
+
+    state.isAuthenticated = true;
+    state.cloudStatus = "connected";
+    setLocalAuthState(true);
+    void loadSnapshotFromCloud(session.user.id)
+      .catch((error) => {
+        state.cloudStatus = "error";
+        console.error("Erro ao carregar dados do Supabase:", error);
+        showToast("Supabase incompleto", getCloudErrorMessage(error));
+      })
+      .finally(() => {
+        state.isLoading = false;
+        renderApp();
+      });
+  });
+
+  authListenerBound = true;
+}
+
 function attachEvents() {
   const loginForm = document.getElementById("login-form");
   if (loginForm) {
-    loginForm.addEventListener("submit", (event) => {
+    loginForm.addEventListener("submit", async (event) => {
       event.preventDefault();
-      state.isAuthenticated = true;
-      writeStorage(STORAGE_KEYS.auth, true);
+      const formData = new FormData(loginForm);
+      const email = String(formData.get("email") || "").trim();
+      const password = String(formData.get("password") || "");
+
+      if (!email || !password) {
+        showToast("Dados inválidos", "Informe e-mail e senha para continuar.");
+        return;
+      }
+
+      if (!hasCloudSync()) {
+        state.isAuthenticated = true;
+        setLocalAuthState(true);
+        renderApp();
+        showToast("Acesso liberado", "Ambiente carregado com os dados salvos neste navegador.");
+        return;
+      }
+
+      const client = getSupabaseClient();
+      if (!client) {
+        showToast("Supabase indisponível", "Não foi possível iniciar a conexão com a nuvem.");
+        return;
+      }
+
+      state.isLoading = true;
       renderApp();
-      showToast("Acesso liberado", "Ambiente carregado com os dados mais recentes.");
+
+      if (state.authMode === "sign_up") {
+        const { data, error } = await client.auth.signUp({
+          email,
+          password,
+          options: { emailRedirectTo: window.location.origin },
+        });
+
+        if (error) {
+          state.isLoading = false;
+          renderApp();
+          showToast("Cadastro não realizado", error.message);
+          return;
+        }
+
+        if (data.session) {
+          state.isAuthenticated = true;
+          setLocalAuthState(true);
+          try {
+            await loadSnapshotFromCloud(data.session.user.id);
+          } catch (error) {
+            state.cloudStatus = "error";
+            console.error("Erro ao carregar dados do Supabase:", error);
+            state.isLoading = false;
+            renderApp();
+            showToast("Supabase incompleto", getCloudErrorMessage(error));
+            return;
+          }
+          state.isLoading = false;
+          renderApp();
+          showToast("Conta criada", "Seu acesso foi criado e a sincronização na nuvem já está ativa.");
+          return;
+        }
+
+        state.isLoading = false;
+        renderApp();
+        showToast("Conta criada", "Verifique seu e-mail para confirmar o acesso e concluir a entrada.");
+        return;
+      }
+
+      const { data, error } = await client.auth.signInWithPassword({ email, password });
+      if (error) {
+        state.isLoading = false;
+        renderApp();
+        showToast("Acesso negado", error.message);
+        return;
+      }
+
+      state.isAuthenticated = true;
+      setLocalAuthState(true);
+      try {
+        await loadSnapshotFromCloud(data.session.user.id);
+      } catch (error) {
+        state.cloudStatus = "error";
+        console.error("Erro ao carregar dados do Supabase:", error);
+        state.isLoading = false;
+        renderApp();
+        showToast("Supabase incompleto", getCloudErrorMessage(error));
+        return;
+      }
+      state.isLoading = false;
+      renderApp();
+      showToast("Acesso liberado", "Ambiente carregado com os dados mais recentes da nuvem.");
     });
   }
 
@@ -1494,10 +1818,30 @@ function attachEvents() {
 
   const recoveryForm = document.getElementById("recovery-form");
   if (recoveryForm) {
-    recoveryForm.addEventListener("submit", (event) => {
+    recoveryForm.addEventListener("submit", async (event) => {
       event.preventDefault();
+      const formData = new FormData(recoveryForm);
+      const email = String(formData.get("email") || "").trim();
+      if (!email) {
+        showToast("E-mail obrigatório", "Informe um e-mail válido para continuar.");
+        return;
+      }
+
+      if (!hasCloudSync()) {
+        state.modal = null;
+        renderApp();
+        showToast("Supabase não configurado", "Conecte o Supabase para usar recuperação de senha por e-mail.");
+        return;
+      }
+
+      const client = getSupabaseClient();
+      const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
       state.modal = null;
       renderApp();
+      if (error) {
+        showToast("Recuperação não enviada", error.message);
+        return;
+      }
       showToast("Recuperação enviada", "Enviamos o link de redefinição para o e-mail informado.");
     });
   }
@@ -1584,7 +1928,7 @@ function attachEvents() {
     renderApp();
   }));
 
-  document.querySelectorAll("[data-action]").forEach((button) => button.addEventListener("click", () => {
+  document.querySelectorAll("[data-action]").forEach((button) => button.addEventListener("click", async () => {
     const action = button.getAttribute("data-action");
     if (action === "toggle-sidebar") { state.sidebarOpen = !state.sidebarOpen; renderApp(); }
     if (action === "export") exportCurrentView();
@@ -1602,11 +1946,27 @@ function attachEvents() {
       }
     }
     if (action === "notifications") showToast("Central de alertas", "2 vendas pendentes e 1 operação em análise.");
-    if (action === "refresh") showToast("Dados atualizados", "Os indicadores foram recalculados com sucesso.");
+    if (action === "refresh") {
+      if (await refreshCloudSnapshot()) {
+        renderApp();
+        showToast("Dados atualizados", "Os indicadores foram recarregados da nuvem com sucesso.");
+      } else {
+        showToast("Dados atualizados", "Os indicadores foram recalculados com sucesso.");
+      }
+    }
+    if (action === "toggle-auth-mode") {
+      state.authMode = state.authMode === "sign_up" ? "sign_in" : "sign_up";
+      renderApp();
+    }
     if (action === "forgot-password") { state.modal = "forgot-password"; state.modalData = null; renderApp(); }
     if (action === "logout") {
+      if (hasCloudSync()) {
+        const client = getSupabaseClient();
+        await client.auth.signOut();
+      }
       state.isAuthenticated = false;
-      removeStorage(STORAGE_KEYS.auth);
+      state.cloudStatus = hasCloudSync() ? "configured" : "local";
+      setLocalAuthState(false);
       state.modal = null;
       state.modalData = null;
       renderApp();
@@ -1712,8 +2072,45 @@ function attachEvents() {
 
 function renderApp() {
   const root = document.getElementById("app");
-  root.innerHTML = state.isAuthenticated ? renderAppShell() : renderLogin();
+  root.innerHTML = state.isLoading ? renderLoading() : (state.isAuthenticated ? renderAppShell() : renderLogin());
   attachEvents();
 }
 
-renderApp();
+async function initApp() {
+  if (!hasCloudSync()) {
+    state.isLoading = false;
+    renderApp();
+    return;
+  }
+
+  bindCloudAuthListener();
+
+  try {
+    const client = getSupabaseClient();
+    const { data, error } = await client.auth.getSession();
+    if (error) throw error;
+
+    if (data.session) {
+      state.isAuthenticated = true;
+      setLocalAuthState(true);
+      try {
+        await loadSnapshotFromCloud(data.session.user.id);
+      } catch (error) {
+        state.cloudStatus = "error";
+        console.error("Erro ao iniciar o CRM com Supabase:", error);
+      }
+    } else {
+      state.isAuthenticated = false;
+      state.cloudStatus = "configured";
+      setLocalAuthState(false);
+    }
+  } catch (error) {
+    state.cloudStatus = "error";
+    console.error("Erro ao iniciar o CRM com Supabase:", error);
+  } finally {
+    state.isLoading = false;
+    renderApp();
+  }
+}
+
+void initApp();

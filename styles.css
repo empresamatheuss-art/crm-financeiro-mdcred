@@ -160,6 +160,12 @@ button { cursor: pointer; border: 0; background: none; }
   color: var(--muted);
 }
 
+.login-status {
+  display: grid;
+  gap: 10px;
+  margin: 20px 0 14px;
+}
+
 .form-stack, .action-row, .topbar-actions, .filters-row, .toolbar-row, .settings-list, .table-actions, .detail-stats, .report-actions, .chart-legend, .progress-row, .table-pagination {
   display: flex;
   gap: 14px;
@@ -587,6 +593,16 @@ tbody tr:hover { background: rgba(36, 107, 255, 0.05); }
 .badge.pendente, .badge.em-analise { background: var(--warning-soft); color: #b54708; }
 .badge.cancelado, .badge.atrasado, .badge.inadimplente, .badge.estornado { background: var(--danger-soft); color: var(--danger); }
 .badge.ativo { background: var(--accent-soft); color: var(--accent); }
+
+.sync-card {
+  margin-top: 18px;
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border-radius: 22px;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.95), rgba(255, 255, 255, 0.98));
+}
 
 .seller-grid, .report-grid, .settings-grid, .goals-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));

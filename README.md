@@ -13,55 +13,20 @@ Este projeto foi construído como uma interface de CRM financeiro com aparência
 
 Atualmente o sistema inclui:
 
-- login visual de acesso
+- login da plataforma
 - dashboard geral com KPIs
 - página financeira com vendas registradas
 - controle de comissões
-- fluxo de caixa
+- fluxo de caixa ligado às vendas
 - ranking e painel de vendedores
 - metas por equipe e por vendedor
 - histórico operacional
 - relatórios com exportação
 - cadastro manual de vendas
 - cadastro manual de vendedores
-- cálculo de comissão do vendedor
-- cálculo de lucro do gestor por venda
-
-## Funcionalidades principais
-
-### Vendas
-
-- cadastro de nova venda por modal
-- campos para vendedor, cliente, valor, banco, status, data da proposta e produto
-- cálculo automático da comissão do vendedor a partir do percentual informado
-- cálculo automático do lucro do gestor a partir do percentual informado
-
-### Vendedores
-
-- cadastro manual de vendedores
-- meta mensal por vendedor
-- ranking visual por resultado
-- cards com progresso de meta
-- painel individual por vendedor
-
-### Gestão
-
-- KPIs de vendas, comissões e lucro
-- filtros globais por período, vendedor, banco, status e busca textual
-- tabelas com ordenação e paginação
-- exportação de dados
-
-## Estrutura do projeto
-
-```text
-.
-├── app.js
-├── index.html
-├── styles.css
-├── server.js
-├── .vercelignore
-└── README.md
-```
+- cálculo automático de comissão do vendedor
+- cálculo automático do lucro do gestor por venda
+- suporte preparado para Supabase
 
 ## Stack usada
 
@@ -69,6 +34,7 @@ Atualmente o sistema inclui:
 - CSS
 - JavaScript vanilla
 - Vercel para deploy
+- Supabase opcional para autenticação e sincronização em nuvem
 
 ## Como rodar localmente
 
@@ -90,28 +56,56 @@ Depois acesse:
 http://127.0.0.1:4173
 ```
 
+## Modo atual dos dados
+
+Sem Supabase configurado:
+
+- os dados ficam salvos localmente no navegador
+- o site abre em qualquer computador, mas os dados não acompanham
+
+Com Supabase configurado:
+
+- o login passa a ser real
+- os dados acompanham sua conta em qualquer dispositivo
+- vendas, vendedores, metas e perfil ficam sincronizados
+
+## Como ativar o Supabase
+
+1. Crie um projeto no Supabase.
+2. No SQL Editor, execute o arquivo [supabase/schema.sql](./supabase/schema.sql).
+3. Abra o arquivo [supabase-config.js](./supabase-config.js).
+4. Preencha:
+
+```js
+window.CRM_SUPABASE_CONFIG = {
+  url: "https://SEU-PROJETO.supabase.co",
+  anonKey: "SUA_CHAVE_PUBLICA",
+};
+```
+
+5. No painel do Supabase, deixe o login por e-mail e senha habilitado.
+6. Publique novamente o projeto na Vercel.
+
 ## Deploy
 
 O projeto está preparado para deploy estático no Vercel.
 
-Comandos usados:
+Comando usado:
 
 ```bash
 vercel --prod
 ```
 
-## Observações
+## Estrutura do projeto
 
-- Os dados atuais são demonstrativos.
-- Parte da persistência ainda está em memória da aplicação.
-- Ao recarregar a página, os cadastros manuais podem voltar ao estado inicial enquanto não houver persistência em banco ou `localStorage`.
-
-## Próximos passos recomendados
-
-- persistência em `localStorage` ou banco de dados
-- edição e exclusão de vendas
-- edição de vendedores e metas
-- autenticação real
-- integração com WhatsApp
-- regras de comissão por banco e produto
-- relatórios mais avançados
+```text
+.
+├── app.js
+├── index.html
+├── styles.css
+├── server.js
+├── supabase-config.js
+├── supabase/
+│   └── schema.sql
+└── README.md
+```
