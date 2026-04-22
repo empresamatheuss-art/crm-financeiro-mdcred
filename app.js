@@ -687,6 +687,30 @@ function renderEmptyState(title, description, actionLabel = "", action = "") {
   `;
 }
 
+function renderLatestSalesList(items) {
+  if (!items.length) {
+    return renderEmptyState("Nenhuma venda registrada", "Cadastre a primeira venda para começar o acompanhamento.");
+  }
+
+  return `
+    <div class="latest-sales-list">
+      ${items.map((sale) => `
+        <article class="latest-sale-item">
+          <div class="latest-sale-date">${fmtDate(sale.data)}</div>
+          <div class="latest-sale-main">
+            <div class="latest-sale-client">${sale.cliente}</div>
+            <div class="latest-sale-meta">${sale.banco}</div>
+          </div>
+          <div class="latest-sale-values">
+            <strong>${fmtCurrency(sale.valor)}</strong>
+            <div class="latest-sale-meta">Comissão ${fmtCurrency(sale.comissao)}</div>
+          </div>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
 function renderKpiCard(title, value, support, deltaText, deltaType) {
   return `
     <article class="kpi-card">
@@ -991,19 +1015,7 @@ function renderDashboardPage(filteredSales) {
       </div>
       <div class="table-card">
         <div class="section-header"><div><div class="section-eyebrow">Últimas Vendas</div><h3 style="margin:4px 0;">Movimentações mais recentes do período</h3></div></div>
-        ${renderTable("dashboard-latest-sales", ["Data", "Cliente", "Resumo financeiro"], latestSales.map((sale) => `
-          <tr>
-            <td>${fmtDate(sale.data)}</td>
-            <td>
-              <div class="table-primary">${sale.cliente}</div>
-              <div class="table-secondary">${sale.banco}</div>
-            </td>
-            <td class="table-summary">
-              <div class="table-primary table-currency">${fmtCurrency(sale.valor)}</div>
-              <div class="table-secondary">Comissão ${fmtCurrency(sale.comissao)}</div>
-            </td>
-          </tr>
-        `))}
+        ${renderLatestSalesList(latestSales)}
       </div>
     </section>
   `;
@@ -2117,3 +2129,4 @@ async function initApp() {
 }
 
 void initApp();
+
