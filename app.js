@@ -991,13 +991,17 @@ function renderDashboardPage(filteredSales) {
       </div>
       <div class="table-card">
         <div class="section-header"><div><div class="section-eyebrow">Últimas Vendas</div><h3 style="margin:4px 0;">Movimentações mais recentes do período</h3></div></div>
-        ${renderTable("dashboard-latest-sales", ["Data", "Cliente", "Valor", "Banco", "Comissão"], latestSales.map((sale) => `
+        ${renderTable("dashboard-latest-sales", ["Data", "Cliente", "Resumo financeiro"], latestSales.map((sale) => `
           <tr>
             <td>${fmtDate(sale.data)}</td>
-            <td>${sale.cliente}</td>
-            <td class="table-currency">${fmtCurrency(sale.valor)}</td>
-            <td>${sale.banco}</td>
-            <td class="table-currency">${fmtCurrency(sale.comissao)}</td>
+            <td>
+              <div class="table-primary">${sale.cliente}</div>
+              <div class="table-secondary">${sale.banco}</div>
+            </td>
+            <td class="table-summary">
+              <div class="table-primary table-currency">${fmtCurrency(sale.valor)}</div>
+              <div class="table-secondary">Comissão ${fmtCurrency(sale.comissao)}</div>
+            </td>
           </tr>
         `))}
       </div>

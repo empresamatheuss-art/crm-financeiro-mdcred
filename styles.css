@@ -674,6 +674,21 @@ tbody tr:hover { background: rgba(36, 107, 255, 0.05); }
   color: var(--primary);
 }
 
+.table-primary {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.table-secondary {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.table-summary {
+  min-width: 170px;
+}
+
 .sort-btn {
   width: 100%;
   display: flex;
