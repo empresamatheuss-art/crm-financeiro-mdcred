@@ -409,12 +409,29 @@ button { cursor: pointer; border: 0; background: none; }
 
 .avatar > div:last-child {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .avatar strong,
 .avatar .helper-text {
   display: block;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: keep-all;
+  white-space: nowrap;
+}
+
+.avatar strong {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.avatar .helper-text {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .avatar-circle {
