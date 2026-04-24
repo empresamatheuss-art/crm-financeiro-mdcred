@@ -395,6 +395,12 @@ const fmtPercent = (value) => {
 const fmtInteger = (value) => new Intl.NumberFormat("pt-BR").format(value);
 const fmtDate = (value) => new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" }).format(new Date(`${value}T00:00:00`));
 const fmtDateFull = (value) => new Intl.DateTimeFormat("pt-BR").format(new Date(`${value}T00:00:00`));
+const toISODate = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
 
 function slugify(text) {
   return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -586,6 +592,14 @@ function getSelectedPeriodLabel() {
   }
 
   return "Período atual · Personalizado";
+}
+
+function getVisiblePeriodInputs() {
+  const { from, to } = getSelectedDateRange();
+  return {
+    from: from ? toISODate(from) : "",
+    to: to ? toISODate(to) : "",
+  };
 }
 
 function matchesSearch(text) {
@@ -1083,7 +1097,7 @@ function renderSidebar(filteredSales) {
 
 function renderFilters() {
   const statusOptions = ["Recebido", "Pendente", "Em análise", "Cancelado", "Confirmado", "Atrasado", "Estornado"];
-  const showCustomPeriod = state.selectedPeriod === "custom";
+  const visiblePeriod = getVisiblePeriodInputs();
   return `
     <div class="panel">
       <div class="section-header">
@@ -1100,21 +1114,14 @@ function renderFilters() {
       <div class="filters-row" style="margin-top:18px;">
         <label class="field field-period">
           <span>Selecionar período</span>
-          <select data-input="period">
-            <option value="7" ${state.selectedPeriod === "7" ? "selected" : ""}>Últimos 7 dias</option>
-            <option value="30" ${state.selectedPeriod === "30" ? "selected" : ""}>Últimos 30 dias</option>
-            <option value="90" ${state.selectedPeriod === "90" ? "selected" : ""}>Últimos 90 dias</option>
-            <option value="180" ${state.selectedPeriod === "180" ? "selected" : ""}>Últimos 180 dias</option>
-            <option value="custom" ${showCustomPeriod ? "selected" : ""}>Período personalizado</option>
-          </select>
           <div class="period-calendar">
             <label class="field field-inline">
               <span>Data inicial</span>
-              <input type="date" value="${state.customDateFrom}" max="${state.customDateTo || todayISO}" data-input="date-from" />
+              <input type="date" value="${visiblePeriod.from}" max="${visiblePeriod.to || todayISO}" data-input="date-from" />
             </label>
             <label class="field field-inline">
               <span>Data final</span>
-              <input type="date" value="${state.customDateTo}" min="${state.customDateFrom || ""}" max="${todayISO}" data-input="date-to" />
+              <input type="date" value="${visiblePeriod.to}" min="${visiblePeriod.from || ""}" max="${todayISO}" data-input="date-to" />
             </label>
           </div>
         </label>
