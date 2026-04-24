@@ -3,6 +3,8 @@ const state = {
   sidebarOpen: false,
   activePage: "dashboard_geral",
   selectedPeriod: "30",
+  customDateFrom: "",
+  customDateTo: "",
   selectedSeller: "all",
   selectedBank: "all",
   selectedStatus: "all",
@@ -392,6 +394,7 @@ const fmtPercent = (value) => {
 };
 const fmtInteger = (value) => new Intl.NumberFormat("pt-BR").format(value);
 const fmtDate = (value) => new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" }).format(new Date(`${value}T00:00:00`));
+const fmtDateFull = (value) => new Intl.DateTimeFormat("pt-BR").format(new Date(`${value}T00:00:00`));
 
 function slugify(text) {
   return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -539,10 +542,50 @@ function getDays(period) {
   return { "7": 7, "30": 30, "90": 90, "180": 180 }[period] ?? 30;
 }
 
-function getDateLimit() {
-  const limit = new Date("2026-04-17T00:00:00");
-  limit.setDate(limit.getDate() - getDays(state.selectedPeriod));
-  return limit;
+function getSelectedDateRange() {
+  if (state.selectedPeriod === "custom") {
+    const from = state.customDateFrom ? new Date(`${state.customDateFrom}T00:00:00`) : null;
+    const to = state.customDateTo ? new Date(`${state.customDateTo}T23:59:59`) : null;
+    return { from, to };
+  }
+
+  const to = new Date();
+  to.setHours(23, 59, 59, 999);
+
+  const from = new Date();
+  from.setHours(0, 0, 0, 0);
+  from.setDate(from.getDate() - getDays(state.selectedPeriod));
+
+  return { from, to };
+}
+
+function isDateWithinSelectedPeriod(value) {
+  const date = new Date(`${value}T12:00:00`);
+  const { from, to } = getSelectedDateRange();
+
+  if (from && date < from) return false;
+  if (to && date > to) return false;
+  return true;
+}
+
+function getSelectedPeriodLabel() {
+  if (state.selectedPeriod !== "custom") {
+    return `Período atual · Últimos ${state.selectedPeriod} dias`;
+  }
+
+  if (state.customDateFrom && state.customDateTo) {
+    return `Período atual · ${fmtDateFull(state.customDateFrom)} até ${fmtDateFull(state.customDateTo)}`;
+  }
+
+  if (state.customDateFrom) {
+    return `Período atual · Desde ${fmtDateFull(state.customDateFrom)}`;
+  }
+
+  if (state.customDateTo) {
+    return `Período atual · Até ${fmtDateFull(state.customDateTo)}`;
+  }
+
+  return "Período atual · Personalizado";
 }
 
 function matchesSearch(text) {
@@ -551,10 +594,9 @@ function matchesSearch(text) {
 }
 
 function getFilteredSales() {
-  const limit = getDateLimit();
   return sales
     .map(parseSale)
-    .filter((sale) => new Date(`${sale.data}T00:00:00`) >= limit)
+    .filter((sale) => isDateWithinSelectedPeriod(sale.data))
     .filter((sale) => state.selectedSeller === "all" || sale.vendedorId === state.selectedSeller)
     .filter((sale) => state.selectedBank === "all" || sale.banco === state.selectedBank)
     .filter((sale) => state.selectedStatus === "all" || slugify(sale.status) === slugify(state.selectedStatus))
@@ -562,11 +604,10 @@ function getFilteredSales() {
 }
 
 function getFilteredCashFlow() {
-  const limit = getDateLimit();
   const saleEntries = sales.map(parseSale).map(saleToCashFlowEntry);
   const manualEntries = cashFlow.map(parseCashFlow);
   return [...saleEntries, ...manualEntries]
-    .filter((entry) => new Date(`${entry.data}T00:00:00`) >= limit)
+    .filter((entry) => isDateWithinSelectedPeriod(entry.data))
     .filter((entry) => state.selectedSeller === "all" || !entry.vendedorId || entry.vendedorId === state.selectedSeller)
     .filter((entry) => state.selectedBank === "all" || !entry.banco || entry.banco === state.selectedBank)
     .filter((entry) => state.selectedStatus === "all" || slugify(entry.status) === slugify(state.selectedStatus))
@@ -993,7 +1034,7 @@ function renderTopbar() {
         </div>
       </div>
       <div class="topbar-actions">
-        <div class="period-pill">Período atual · Últimos ${state.selectedPeriod} dias</div>
+        <div class="period-pill">${getSelectedPeriodLabel()}</div>
         <div class="searchbox">
           <span>⌕</span>
           <input type="search" placeholder="Pesquisar" value="${state.searchTerm}" data-input="search" />
@@ -1042,6 +1083,7 @@ function renderSidebar(filteredSales) {
 
 function renderFilters() {
   const statusOptions = ["Recebido", "Pendente", "Em análise", "Cancelado", "Confirmado", "Atrasado", "Estornado"];
+  const showCustomPeriod = state.selectedPeriod === "custom";
   return `
     <div class="panel">
       <div class="section-header">
@@ -1063,8 +1105,19 @@ function renderFilters() {
             <option value="30" ${state.selectedPeriod === "30" ? "selected" : ""}>Últimos 30 dias</option>
             <option value="90" ${state.selectedPeriod === "90" ? "selected" : ""}>Últimos 90 dias</option>
             <option value="180" ${state.selectedPeriod === "180" ? "selected" : ""}>Últimos 180 dias</option>
+            <option value="custom" ${showCustomPeriod ? "selected" : ""}>Período personalizado</option>
           </select>
         </label>
+        ${showCustomPeriod ? `
+          <label class="field">
+            <span>Data inicial</span>
+            <input type="date" value="${state.customDateFrom}" max="${state.customDateTo || todayISO}" data-input="date-from" />
+          </label>
+          <label class="field">
+            <span>Data final</span>
+            <input type="date" value="${state.customDateTo}" min="${state.customDateFrom || ""}" max="${todayISO}" data-input="date-to" />
+          </label>
+        ` : ""}
         <label class="field">
           <span>Todos os vendedores</span>
           <select data-input="seller">
@@ -2084,9 +2137,25 @@ function attachEvents() {
     const type = input.getAttribute("data-input");
     if (type === "search") state.searchTerm = input.value;
     if (type === "period") state.selectedPeriod = input.value;
+    if (type === "date-from") state.customDateFrom = input.value;
+    if (type === "date-to") state.customDateTo = input.value;
     if (type === "seller") state.selectedSeller = input.value;
     if (type === "bank") state.selectedBank = input.value;
     if (type === "status") state.selectedStatus = input.value;
+
+    if (type === "period" && state.selectedPeriod !== "custom") {
+      state.customDateFrom = "";
+      state.customDateTo = "";
+    }
+
+    if (type === "date-from" && state.customDateTo && state.customDateFrom && state.customDateFrom > state.customDateTo) {
+      state.customDateTo = state.customDateFrom;
+    }
+
+    if (type === "date-to" && state.customDateFrom && state.customDateTo && state.customDateTo < state.customDateFrom) {
+      state.customDateFrom = state.customDateTo;
+    }
+
     renderApp();
   }));
 
@@ -2137,6 +2206,8 @@ function attachEvents() {
     }
     if (action === "clear-filters") {
       state.selectedPeriod = "30";
+      state.customDateFrom = "";
+      state.customDateTo = "";
       state.selectedSeller = "all";
       state.selectedBank = "all";
       state.selectedStatus = "all";
