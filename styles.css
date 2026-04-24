@@ -584,6 +584,24 @@ button { cursor: pointer; border: 0; background: none; }
 .filters-row, .toolbar-row, .chart-legend, .progress-row, .table-pagination, .report-actions, .detail-stats { flex-wrap: wrap; }
 .filters-row .field, .toolbar-row .field { min-width: 160px; flex: 1 1 160px; }
 
+.field-period {
+  flex: 1.35 1 340px !important;
+}
+
+.period-calendar {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.field-inline {
+  min-width: 0;
+}
+
+.field-inline span {
+  font-size: 0.82rem;
+}
+
 .chart-wrap {
   margin-top: 16px;
   border-radius: 22px;
@@ -1345,6 +1363,7 @@ tbody tr:hover { background: rgba(36, 107, 255, 0.05); }
   .trust-grid, .hero-metrics, .kpi-grid, .triple-grid { grid-template-columns: 1fr; }
   .action-row, .topbar-actions, .table-toolbar, .table-actions { flex-direction: column; }
   .searchbox, .toolbar-row .field, .filters-row .field { min-width: 100%; }
+  .period-calendar { grid-template-columns: 1fr; }
   .modal-grid { grid-template-columns: 1fr; }
   .modal-actions { flex-direction: column; }
   .sale-preview { grid-template-columns: 1fr; }

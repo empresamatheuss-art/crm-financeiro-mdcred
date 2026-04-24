@@ -1098,7 +1098,7 @@ function renderFilters() {
         </div>
       </div>
       <div class="filters-row" style="margin-top:18px;">
-        <label class="field">
+        <label class="field field-period">
           <span>Selecionar período</span>
           <select data-input="period">
             <option value="7" ${state.selectedPeriod === "7" ? "selected" : ""}>Últimos 7 dias</option>
@@ -1107,14 +1107,16 @@ function renderFilters() {
             <option value="180" ${state.selectedPeriod === "180" ? "selected" : ""}>Últimos 180 dias</option>
             <option value="custom" ${showCustomPeriod ? "selected" : ""}>Período personalizado</option>
           </select>
-        </label>
-        <label class="field">
-          <span>Data inicial</span>
-          <input type="date" value="${state.customDateFrom}" max="${state.customDateTo || todayISO}" data-input="date-from" />
-        </label>
-        <label class="field">
-          <span>Data final</span>
-          <input type="date" value="${state.customDateTo}" min="${state.customDateFrom || ""}" max="${todayISO}" data-input="date-to" />
+          <div class="period-calendar">
+            <label class="field field-inline">
+              <span>Data inicial</span>
+              <input type="date" value="${state.customDateFrom}" max="${state.customDateTo || todayISO}" data-input="date-from" />
+            </label>
+            <label class="field field-inline">
+              <span>Data final</span>
+              <input type="date" value="${state.customDateTo}" min="${state.customDateFrom || ""}" max="${todayISO}" data-input="date-to" />
+            </label>
+          </div>
         </label>
         <label class="field">
           <span>Todos os vendedores</span>
