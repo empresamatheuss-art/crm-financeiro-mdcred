@@ -1108,16 +1108,14 @@ function renderFilters() {
             <option value="custom" ${showCustomPeriod ? "selected" : ""}>Período personalizado</option>
           </select>
         </label>
-        ${showCustomPeriod ? `
-          <label class="field">
-            <span>Data inicial</span>
-            <input type="date" value="${state.customDateFrom}" max="${state.customDateTo || todayISO}" data-input="date-from" />
-          </label>
-          <label class="field">
-            <span>Data final</span>
-            <input type="date" value="${state.customDateTo}" min="${state.customDateFrom || ""}" max="${todayISO}" data-input="date-to" />
-          </label>
-        ` : ""}
+        <label class="field">
+          <span>Data inicial</span>
+          <input type="date" value="${state.customDateFrom}" max="${state.customDateTo || todayISO}" data-input="date-from" />
+        </label>
+        <label class="field">
+          <span>Data final</span>
+          <input type="date" value="${state.customDateTo}" min="${state.customDateFrom || ""}" max="${todayISO}" data-input="date-to" />
+        </label>
         <label class="field">
           <span>Todos os vendedores</span>
           <select data-input="seller">
@@ -2137,8 +2135,14 @@ function attachEvents() {
     const type = input.getAttribute("data-input");
     if (type === "search") state.searchTerm = input.value;
     if (type === "period") state.selectedPeriod = input.value;
-    if (type === "date-from") state.customDateFrom = input.value;
-    if (type === "date-to") state.customDateTo = input.value;
+    if (type === "date-from") {
+      state.customDateFrom = input.value;
+      state.selectedPeriod = input.value || state.customDateTo ? "custom" : "30";
+    }
+    if (type === "date-to") {
+      state.customDateTo = input.value;
+      state.selectedPeriod = state.customDateFrom || input.value ? "custom" : "30";
+    }
     if (type === "seller") state.selectedSeller = input.value;
     if (type === "bank") state.selectedBank = input.value;
     if (type === "status") state.selectedStatus = input.value;
