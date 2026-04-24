@@ -586,20 +586,28 @@ button { cursor: pointer; border: 0; background: none; }
 
 .field-period {
   flex: 1.35 1 340px !important;
+  justify-content: space-between;
 }
 
 .period-calendar {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+  align-items: end;
 }
 
 .field-inline {
+  display: grid;
+  grid-template-rows: auto 1fr;
   min-width: 0;
 }
 
 .field-inline span {
   font-size: 0.82rem;
+}
+
+.filters-row {
+  align-items: end;
 }
 
 .chart-wrap {
